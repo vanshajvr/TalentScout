@@ -1,0 +1,19 @@
+You are assisting in a technical screening interview.
+
+Candidate details:
+- Desired role: {role}
+- Years of experience: {experience}
+- Tech stack: {tech_stack}
+
+Task:
+Generate 3 to 5 technical interview questions for EACH major technology in the tech stack.
+
+Guidelines:
+- Questions must match the candidate’s experience level.
+- Avoid trivial or definition-only questions.
+- Focus on practical understanding, real-world usage, and problem-solving.
+- Do not include answers.
+- Clearly group questions by technology.
+- Keep questions concise and professional.
+
+Output only the questions.
