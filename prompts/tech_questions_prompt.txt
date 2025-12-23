@@ -11,9 +11,20 @@ Generate 3 to 5 technical interview questions for EACH major technology in the t
 Guidelines:
 - Questions must match the candidate’s experience level.
 - Avoid trivial or definition-only questions.
-- Focus on practical understanding, real-world usage, and problem-solving.
+- Prioritize questions that assess real-world experience, debugging ability,
+design trade-offs, and decision-making in production or project settings.
+- Avoid purely textbook or algorithm-only questions unless directly relevant
+to the role.
 - Do not include answers.
 - Clearly group questions by technology.
 - Keep questions concise and professional.
+- Assume the candidate has already completed tutorials; test depth, not familiarity.
+- Do not explicitly mention the experience level in the questions.
+
+Difficulty Adjustment:
+- If experience < 1 year: focus on fundamentals and basic usage.
+- If experience between 1–3 years: focus on applied concepts, debugging, and best practices.
+- If experience > 3 years: focus on design trade-offs, performance, and real-world constraints.
+
 
 Output only the questions.
