@@ -94,7 +94,7 @@ ollama pull llama3
 streamlit run app.py
 ```
 ## Demo
-[A short demo video demonstrating the chatbot flow and features is provided.](https://drive.google.com/drive/u/6/home)
+[A short demo video demonstrating the chatbot flow and features is provided.](https://www.loom.com/share/40afa6c92d384de790611ec494e7f769)
 
 ## Summary
 
