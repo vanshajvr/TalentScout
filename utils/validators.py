@@ -5,7 +5,7 @@ def is_valid_name(name: str) -> bool:
     parts = name.split()
     return (
         len(parts) >= 2
-        and all(part.isalpha() for part in parts)
+        and all(re.fullmatch(r"[A-Za-z'\-]+", part) for part in parts)
     )
 
 def is_valid_email(email: str) -> bool:
@@ -13,7 +13,7 @@ def is_valid_email(email: str) -> bool:
     return re.match(pattern, email) is not None
 
 def is_valid_phone(phone: str) -> bool:
-    phone = phone.replace(" ", "").replace("-", "")
+    phone = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
     if phone.startswith("+"):
         phone = phone[1:]
 
