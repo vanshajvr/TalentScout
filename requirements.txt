@@ -1,4 +1,6 @@
 ollama
 fastapi
-uvicornsqlalchemy
+uvicorn
+sqlalchemy
 psycopg2-binary
+python-multipart
