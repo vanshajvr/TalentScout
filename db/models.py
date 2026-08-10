@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, Text, Float, JSON
+from sqlalchemy import ForeignKey, String, Text, Float, JSON, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -68,6 +68,7 @@ class Message(Base):
     session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sessions.id"))
     role: Mapped[str] = mapped_column(String(10))
     content: Mapped[str] = mapped_column(Text)
+    is_pasted: Mapped[bool] = mapped_column(Boolean, default=False)
     timestamp: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     session: Mapped["Session"] = relationship(back_populates="messages")
