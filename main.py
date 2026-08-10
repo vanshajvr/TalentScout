@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
 from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion
-from conversation import ConversationState, CandidateState, handle_user_input, get_bot_message
+from conversation import ConversationState, handle_user_input, get_bot_message
 from llm.ollama_llm import OllamaLLM
+from utils.constants import BEHAVIORAL_QUESTION_TEMPLATES
 
 app = FastAPI(title="TalentScout API")
 llm = OllamaLLM()
@@ -74,6 +75,31 @@ def _difficulty_tier(experience: str) -> str:
     return "advanced"
 
 
+def _format_history(qa_history: list[tuple[str, str]]) -> str:
+    if not qa_history:
+        return "(none yet)"
+    return "\n\n".join(f"Q: {q}\nA: {a}" for q, a in qa_history)
+
+
+def _generate_next_question(state: ConversationState) -> str:
+    plan_item = state.interview_plan[state.interview_index]
+    role = state.candidate.role
+
+    if plan_item == "behavioral_role":
+        return BEHAVIORAL_QUESTION_TEMPLATES[0].format(role=role)
+    if plan_item == "behavioral_stream":
+        return BEHAVIORAL_QUESTION_TEMPLATES[1].format(role=role, role_lower=role.lower())
+
+    prompt_template = _load_prompt("prompts/next_question_prompt.txt")
+    prompt = prompt_template.format(
+        role=role,
+        experience=state.candidate.experience,
+        technology=plan_item,
+        qa_history=_format_history(state.qa_history),
+    )
+    return llm.generate(prompt).strip()
+
+
 @app.post("/sessions", response_model=StartSessionResponse)
 def start_session(db: SQLASession = Depends(get_db)):
     candidate_row = Candidate()
@@ -109,6 +135,10 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
 
     db.add(Message(session_id=session_uuid, role="user", content=body.text))
 
+    # snapshot before handle_user_input mutates state, so we know which
+    # question this answer belongs to
+    prev_question = state.current_question if state.step == "interviewing" else None
+
     result = handle_user_input(state, body.text)
     state = result.state
     ACTIVE_SESSIONS[session_id] = state
@@ -122,36 +152,40 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
 
     _sync_candidate_row(db, session_row.candidate_id, state)
 
+    # save the answer against the question it belongs to
+    if prev_question:
+        q_row = (
+            db.query(GeneratedQuestion)
+            .filter_by(session_id=session_uuid, question_text=prev_question)
+            .first()
+        )
+        if q_row is not None:
+            q_row.answer_text = body.text
+            db.commit()
+
     bot_messages = list(result.bot_messages)
 
-    if state.step == "generate_questions":
-        prompt_template = _load_prompt("prompts/tech_questions_prompt.txt")
-        filled_prompt = prompt_template.format(
-            role=state.candidate.role,
-            experience=state.candidate.experience,
-            tech_stack=", ".join(state.candidate.tech_stack),
-        )
-        questions_text = llm.generate(filled_prompt)
-
-        db.add(GeneratedQuestion(
-            session_id=session_uuid,
-            technology=", ".join(state.candidate.tech_stack),
-            question_text=questions_text,
-            difficulty_tier=_difficulty_tier(state.candidate.experience),
-        ))
-        db.add(Message(session_id=session_uuid, role="assistant", content=questions_text))
-
-        state.step = "end"
-        session_row.current_step = "end"
-        session_row.status = "completed"
-        db.commit()
+    # need to generate the next (or first) interview question
+    if state.step == "interviewing" and not state.current_question:
+        question_text = _generate_next_question(state)
+        state.current_question = question_text
         ACTIVE_SESSIONS[session_id] = state
 
-        bot_messages.append(questions_text)
-        closing = get_bot_message(state)
-        db.add(Message(session_id=session_uuid, role="assistant", content=closing))
+        plan_item = state.interview_plan[state.interview_index]
+        db.add(GeneratedQuestion(
+            session_id=session_uuid,
+            technology=plan_item,
+            question_text=question_text,
+            difficulty_tier=_difficulty_tier(state.candidate.experience),
+            answer_text=None,
+        ))
+        db.add(Message(session_id=session_uuid, role="assistant", content=question_text))
         db.commit()
-        bot_messages.append(closing)
+        bot_messages.append(question_text)
+
+    if state.step == "end" and session_row.status != "completed":
+        session_row.status = "completed"
+        db.commit()
 
     return MessageResponse(
         messages=bot_messages,

@@ -55,9 +55,9 @@ class GeneratedQuestion(Base):
     technology: Mapped[str] = mapped_column(String(80))
     question_text: Mapped[str] = mapped_column(Text)
     difficulty_tier: Mapped[str] = mapped_column(String(20))
+    answer_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     session: Mapped["Session"] = relationship(back_populates="questions")
-
 
 class Message(Base):
     __tablename__ = "messages"
