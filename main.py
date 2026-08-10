@@ -1,4 +1,5 @@
 import uuid
+import copy
 
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
@@ -133,20 +134,37 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid session_id")
 
+    session_row = _get_session_or_404(db, session_uuid)
+
     db.add(Message(session_id=session_uuid, role="user", content=body.text))
 
-    # snapshot before handle_user_input mutates state, so we know which
-    # question this answer belongs to
     prev_question = state.current_question if state.step == "interviewing" else None
+    was_ask_email_step = state.step == "ask_email"
+    state_snapshot = copy.deepcopy(state)
 
     result = handle_user_input(state, body.text)
     state = result.state
+
+    # catch duplicate email BEFORE it ever reaches the database
+    if was_ask_email_step and state.candidate.email:
+        duplicate = (
+            db.query(Candidate)
+            .filter(Candidate.email == state.candidate.email, Candidate.id != session_row.candidate_id)
+            .first()
+        )
+        if duplicate is not None:
+            state = state_snapshot  # revert — never advanced past ask_email
+            ACTIVE_SESSIONS[session_id] = state
+            msg = "That email is already registered with another screening. Please use a different email address."
+            db.add(Message(session_id=session_uuid, role="assistant", content=msg))
+            db.commit()
+            return MessageResponse(messages=[msg], step=state.step, candidate=vars(state.candidate))
+
     ACTIVE_SESSIONS[session_id] = state
 
     for msg in result.bot_messages:
         db.add(Message(session_id=session_uuid, role="assistant", content=msg))
 
-    session_row = _get_session_or_404(db, session_uuid)
     session_row.current_step = state.step
     db.commit()
 
