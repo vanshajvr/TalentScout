@@ -16,13 +16,13 @@ class Candidate(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    name: Mapped[str] = mapped_column(String(120))
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    phone: Mapped[str] = mapped_column(String(20))
-    location: Mapped[str] = mapped_column(String(120))
-    experience: Mapped[float] = mapped_column(Float)
-    role: Mapped[str] = mapped_column(String(120))
-    tech_stack: Mapped[list[str]] = mapped_column(JSON)
+    name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    experience: Mapped[float | None] = mapped_column(Float, nullable=True)
+    role: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    tech_stack: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     sessions: Mapped[list["Session"]] = relationship(back_populates="candidate")
