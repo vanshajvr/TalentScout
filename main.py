@@ -5,6 +5,10 @@ from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as SQLASession
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+import db
 from db.database import get_db
 from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion
 from conversation import ConversationState, handle_user_input, get_bot_message
@@ -12,6 +16,12 @@ from llm.ollama_llm import OllamaLLM
 from utils.constants import BEHAVIORAL_QUESTION_TEMPLATES
 
 app = FastAPI(title="TalentScout API")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/")
+def serve_frontend():
+    return FileResponse("static/index.html")
+
 llm = OllamaLLM()
 
 ACTIVE_SESSIONS: dict[str, ConversationState] = {}
@@ -24,7 +34,7 @@ class StartSessionResponse(BaseModel):
 
 class MessageRequest(BaseModel):
     text: str
-
+    pasted: bool = False
 
 class MessageResponse(BaseModel):
     messages: list[str]
@@ -136,8 +146,7 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
 
     session_row = _get_session_or_404(db, session_uuid)
 
-    db.add(Message(session_id=session_uuid, role="user", content=body.text))
-
+    db.add(Message(session_id=session_uuid, role="user", content=body.text, is_pasted=body.pasted))
     prev_question = state.current_question if state.step == "interviewing" else None
     was_ask_email_step = state.step == "ask_email"
     state_snapshot = copy.deepcopy(state)
