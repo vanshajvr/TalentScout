@@ -19,11 +19,15 @@ class Candidate(Base):
     name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    phone_verified: Mapped[bool] = mapped_column(Boolean, default=False)        
     location: Mapped[str | None] = mapped_column(String(120), nullable=True)
     experience: Mapped[float | None] = mapped_column(Float, nullable=True)
     role: Mapped[str | None] = mapped_column(String(120), nullable=True)
     tech_stack: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    resume_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    resume_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     sessions: Mapped[list["Session"]] = relationship(back_populates="candidate")
 
