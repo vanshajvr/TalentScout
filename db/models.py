@@ -1,0 +1,73 @@
+import uuid
+from datetime import datetime
+
+from sqlalchemy import ForeignKey, String, Text, Float, JSON
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Candidate(Base):
+    __tablename__ = "candidates"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    name: Mapped[str] = mapped_column(String(120))
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    phone: Mapped[str] = mapped_column(String(20))
+    location: Mapped[str] = mapped_column(String(120))
+    experience: Mapped[float] = mapped_column(Float)
+    role: Mapped[str] = mapped_column(String(120))
+    tech_stack: Mapped[list[str]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    sessions: Mapped[list["Session"]] = relationship(back_populates="candidate")
+
+
+class Session(Base):
+    __tablename__ = "sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    candidate_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("candidates.id"))
+    current_step: Mapped[str] = mapped_column(String(50))
+    status: Mapped[str] = mapped_column(String(20), default="in_progress")
+    started_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+    candidate: Mapped["Candidate"] = relationship(back_populates="sessions")
+    questions: Mapped[list["GeneratedQuestion"]] = relationship(back_populates="session")
+    messages: Mapped[list["Message"]] = relationship(back_populates="session")
+
+
+class GeneratedQuestion(Base):
+    __tablename__ = "generated_questions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sessions.id"))
+    technology: Mapped[str] = mapped_column(String(80))
+    question_text: Mapped[str] = mapped_column(Text)
+    difficulty_tier: Mapped[str] = mapped_column(String(20))
+
+    session: Mapped["Session"] = relationship(back_populates="questions")
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sessions.id"))
+    role: Mapped[str] = mapped_column(String(10))
+    content: Mapped[str] = mapped_column(Text)
+    timestamp: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    session: Mapped["Session"] = relationship(back_populates="messages")
