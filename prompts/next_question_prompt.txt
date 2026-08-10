@@ -8,10 +8,19 @@ Conversation so far:
 {qa_history}
 
 Task: Ask ONE technical interview question about {technology} that:
-- Tests practical or conceptual understanding, not a textbook definition
-- Can be answered concisely — not an essay prompt
-- Assumes the candidate already knows the basics
+- Tests conceptual understanding, judgment, or debugging intuition — NOT a
+  coding exercise. Do not ask the candidate to "write a function," "write
+  code," or "implement" anything.
+- Can be answered in a few spoken sentences, the way a real interview
+  conversation works — not a task that requires whiteboarding or typing code
+- Assumes the candidate already knows the basics — ask about trade-offs,
+  failure modes, "why would you choose X over Y," or "what would you check
+  if this went wrong" style questions instead of definitions
 - Does not repeat a topic already covered above
 - Matches the candidate's experience level
+
+Good example style: "What would make you reach for a generator instead of
+building a full list in memory?"
+Bad example style: "Write a function that reverses a linked list."
 
 Output only the question, nothing else.
