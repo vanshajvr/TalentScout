@@ -1,3 +1,4 @@
 ollama
 fastapi
-uvicorn
+uvicornsqlalchemy
+psycopg2-binary
