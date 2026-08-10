@@ -1,6 +1,10 @@
 import uuid
 import copy
+import time
+import secrets
+import os
 
+from fastapi import UploadFile, File
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as SQLASession
@@ -11,9 +15,12 @@ from fastapi.responses import FileResponse
 import db
 from db.database import get_db
 from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion
-from conversation import ConversationState, handle_user_input, get_bot_message
+from conversation import ConversationState, handle_user_input, get_bot_message, next_step
 from llm.ollama_llm import OllamaLLM
 from utils.constants import BEHAVIORAL_QUESTION_TEMPLATES
+
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 app = FastAPI(title="TalentScout API")
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -61,6 +68,9 @@ def _get_session_or_404(db: SQLASession, session_id: uuid.UUID) -> SessionModel:
     return row
 
 
+def _generate_mock_otp() -> str:
+    return str(secrets.randbelow(1_000_000)).zfill(6)
+
 def _sync_candidate_row(db: SQLASession, candidate_id: uuid.UUID, state: ConversationState) -> None:
     row = _get_candidate_or_404(db, candidate_id)
     c = state.candidate
@@ -71,8 +81,9 @@ def _sync_candidate_row(db: SQLASession, candidate_id: uuid.UUID, state: Convers
     row.experience = float(c.experience.replace("+", "")) if c.experience else None
     row.role = c.role or None
     row.tech_stack = c.tech_stack or None
+    row.email_verified = c.email_verified
+    row.phone_verified = c.phone_verified
     db.commit()
-
 
 def _difficulty_tier(experience: str) -> str:
     try:
@@ -91,6 +102,7 @@ def _format_history(qa_history: list[tuple[str, str]]) -> str:
         return "(none yet)"
     return "\n\n".join(f"Q: {q}\nA: {a}" for q, a in qa_history)
 
+_SYSTEM_PROMPT = _load_prompt("prompts/system_prompt.txt")  # load once at import time
 
 def _generate_next_question(state: ConversationState) -> str:
     plan_item = state.interview_plan[state.interview_index]
@@ -108,8 +120,15 @@ def _generate_next_question(state: ConversationState) -> str:
         technology=plan_item,
         qa_history=_format_history(state.qa_history),
     )
-    return llm.generate(prompt).strip()
-
+    try:
+        return llm.generate(prompt, system=_SYSTEM_PROMPT).strip()
+    except Exception:
+        # Ollama down / model not pulled / any other failure — degrade
+        # gracefully instead of a raw 500 mid-interview
+        return (
+            f"(We're having trouble generating a tailored question right now — "
+            f"tell me about your experience with {plan_item}.)"
+        )
 
 @app.post("/sessions", response_model=StartSessionResponse)
 def start_session(db: SQLASession = Depends(get_db)):
@@ -210,6 +229,23 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
         db.commit()
         bot_messages.append(question_text)
 
+    if state.step in ("verify_email", "verify_phone") and not state.pending_otp:
+        code = _generate_mock_otp()
+        state.pending_otp = code
+        ACTIVE_SESSIONS[session_id] = state
+
+        channel = "email" if state.step == "verify_email" else "phone"
+        target = state.candidate.email if channel == "email" else state.candidate.phone
+        msg = (
+            f"[DEV MODE — mock OTP, not actually sent]\n"
+            f"Your verification code for {target} is: **{code}**\n"
+            f"(In production this would be delivered via SMS/email through Twilio — "
+            f"you're seeing it directly here only because this is a demo build.)"
+        )
+        db.add(Message(session_id=session_uuid, role="assistant", content=msg))
+        db.commit()
+        bot_messages.append(msg)
+
     if state.step == "end" and session_row.status != "completed":
         session_row.status = "completed"
         db.commit()
@@ -220,6 +256,45 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
         candidate=vars(state.candidate),
     )
 
+@app.post("/sessions/{session_id}/resume")
+def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession = Depends(get_db)):
+    state = ACTIVE_SESSIONS.get(session_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    if state.step != "upload_resume":
+        raise HTTPException(status_code=400, detail="Not expecting a resume upload right now")
+
+    try:
+        session_uuid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+
+    allowed = {".pdf", ".docx"}
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in allowed:
+        raise HTTPException(status_code=400, detail="Only PDF or DOCX files are accepted")
+
+    safe_name = f"{session_id}{ext}"
+    dest_path = os.path.join(UPLOAD_DIR, safe_name)
+    with open(dest_path, "wb") as f:
+        f.write(file.file.read())
+
+    session_row = _get_session_or_404(db, session_uuid)
+    candidate_row = _get_candidate_or_404(db, session_row.candidate_id)
+    candidate_row.resume_filename = file.filename
+    candidate_row.resume_path = dest_path
+    db.commit()
+
+    state.step = next_step(state.step)  # advances past upload_resume to ask_tech_stack
+    ACTIVE_SESSIONS[session_id] = state
+
+    bot_reply = get_bot_message(state)
+    db.add(Message(session_id=session_uuid, role="user", content=f"[uploaded resume: {file.filename}]"))
+    db.add(Message(session_id=session_uuid, role="assistant", content=bot_reply))
+    session_row.current_step = state.step
+    db.commit()
+
+    return MessageResponse(messages=[bot_reply], step=state.step, candidate=vars(state.candidate))
 
 @app.get("/sessions/{session_id}")
 def get_session(session_id: str, db: SQLASession = Depends(get_db)):

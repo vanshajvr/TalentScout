@@ -6,11 +6,10 @@ class OllamaLLM(BaseLLM):
     def __init__(self, model_name: str = "llama3"):
         self.model_name = model_name
 
-    def generate(self, prompt: str) -> str:
-        response = ollama.chat(
-            model=self.model_name,
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
+    def generate(self, prompt: str, system: str | None = None) -> str:
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        response = ollama.chat(model=self.model_name, messages=messages)
         return response["message"]["content"]
