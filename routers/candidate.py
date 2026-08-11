@@ -3,6 +3,10 @@ import copy
 import secrets
 import os
 
+import pdfplumber
+from docx import Document as DocxDocument
+import json
+
 import smtplib
 from email.mime.text import MIMEText
 
@@ -12,9 +16,10 @@ from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
 from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion
-from conversation import ConversationState, handle_user_input, get_bot_message, next_step
-from llm.ollama_llm import OllamaLLM
+from conversation import ConversationState, handle_user_input, get_bot_message
+from llm.groq_llm import GroqLLM
 from utils.constants import BEHAVIORAL_QUESTION_TEMPLATES
+from utils.validators import is_valid_email, is_valid_phone
 from deps import get_candidate_or_404, get_session_or_404
 
 router = APIRouter()
@@ -22,7 +27,7 @@ router = APIRouter()
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-llm = OllamaLLM()
+llm = GroqLLM()
 ACTIVE_SESSIONS: dict[str, ConversationState] = {}
 
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
@@ -45,8 +50,51 @@ class MessageResponse(BaseModel):
     messages: list[str]
     step: str
     candidate: dict
+    extracted: dict | None = None
 
+class ConfirmResumeRequest(BaseModel):
+    email: str | None = None
+    phone: str | None = None
+    location: str | None = None
+    experience: str | None = None
+    role: str | None = None
+    tech_stack: list[str] | None = None
+    education: str | None = None
+    linkedin: str | None = None
+    github: str | None = None
 
+def _extract_resume_text(file_path: str, ext: str) -> str:
+    if ext == ".pdf":
+        text_parts = []
+        with pdfplumber.open(file_path) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+                for link in getattr(page, "hyperlinks", []):
+                    uri = link.get("uri", "")
+                    if uri:
+                        text_parts.append(f"[link: {uri}]")
+        return "\n".join(text_parts)
+    elif ext == ".docx":
+        doc = DocxDocument(file_path)
+        return "\n".join(p.text for p in doc.paragraphs)
+    return ""
+
+def _extract_resume_fields(resume_text: str) -> dict:
+    if not resume_text.strip():
+        return {}
+    prompt_template = _load_prompt("prompts/resume_extraction_prompt.txt")
+    prompt = prompt_template.format(resume_text=resume_text[:6000])
+    try:
+        raw = llm.generate(prompt, temperature=0).strip()
+        if raw.startswith("```"):
+            raw = raw.strip("`").replace("json", "", 1).strip()
+        return json.loads(raw)
+    except Exception as e:
+        print(f"Resume extraction failed: {e}")
+        return {}
+    
 def _load_prompt(path: str) -> str:
     with open(path, "r") as f:
         return f.read()
@@ -58,12 +106,40 @@ _SYSTEM_PROMPT = _load_prompt("prompts/system_prompt.txt")
 def _generate_mock_otp() -> str:
     return str(secrets.randbelow(1_000_000)).zfill(6)
 
+def _send_otp_email(to_email: str, code: str) -> bool:
+    if not SMTP_USER or not SMTP_PASSWORD:
+        return False
+
+    smtp_user: str = SMTP_USER
+    smtp_password: str = SMTP_PASSWORD
+    smtp_from: str = SMTP_FROM or smtp_user
+
+    body = (
+        f"Your TalentScout verification code is: {code}\n\n"
+        f"If you didn't request this, you can ignore this email."
+    )
+    msg = MIMEText(body)
+    msg["Subject"] = "Your TalentScout verification code"
+    msg["From"] = smtp_from
+    msg["To"] = to_email
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.sendmail(smtp_from, [to_email], msg.as_string())
+        return True
+    except Exception as e:
+        print(f"OTP email send failed: {e}")
+        return False
+
 
 def _sync_candidate_row(db: SQLASession, candidate_id: uuid.UUID, state: ConversationState) -> None:
     row = get_candidate_or_404(db, candidate_id)
     c = state.candidate
     row.name = c.name or None
     row.email = c.email or None
+    row.education = c.education or None
     row.phone = c.phone or None
     row.location = c.location or None
     row.experience = float(c.experience.replace("+", "")) if c.experience else None
@@ -71,6 +147,8 @@ def _sync_candidate_row(db: SQLASession, candidate_id: uuid.UUID, state: Convers
     row.tech_stack = c.tech_stack or None
     row.email_verified = c.email_verified
     row.phone_verified = c.phone_verified
+    row.linkedin_url = c.linkedin or None
+    row.github_url = c.github or None
     db.commit()
 
 
@@ -93,6 +171,8 @@ def _format_history(qa_history: list[tuple[str, str]]) -> str:
 
 
 def _generate_next_question(state: ConversationState) -> str:
+    if state.interview_index >= len(state.interview_plan):
+        return "Thank you — that's all the questions I have for now."
     plan_item = state.interview_plan[state.interview_index]
     role = state.candidate.role
 
@@ -116,6 +196,50 @@ def _generate_next_question(state: ConversationState) -> str:
             f"(We're having trouble generating a tailored question right now — "
             f"tell me about your experience with {plan_item}.)"
         )
+    
+def _post_process_turn(state, session_uuid, db, session_row, bot_messages):
+    if state.step == "interviewing" and not state.current_question and not state.current_question:
+        question_text = _generate_next_question(state)
+        state.current_question = question_text
+        plan_item = state.interview_plan[state.interview_index]
+        db.add(GeneratedQuestion(
+            session_id=session_uuid,
+            technology=plan_item,
+            question_text=question_text,
+            difficulty_tier=_difficulty_tier(state.candidate.experience),
+            answer_text=None,
+        ))
+        db.add(Message(session_id=session_uuid, role="assistant", content=question_text))
+        db.commit()
+        bot_messages.append(question_text)
+
+    if state.step in ("verify_email", "verify_phone") and not state.pending_otp:
+        code = _generate_mock_otp()
+        state.pending_otp = code
+        if state.step == "verify_email":
+            target = state.candidate.email
+            sent = _send_otp_email(target, code)
+            msg = (
+                f"We've sent a 6-digit verification code to {target}. Please enter it below."
+                if sent else
+                f"(Email delivery isn't configured yet — for testing, your code is: {code})"
+            )
+        else:
+            target = state.candidate.phone
+            msg = (
+                f"[DEV MODE — mock OTP, not actually sent]\n"
+                f"Your verification code for {target} is: **{code}**\n"
+                f"(Real SMS via Firebase coming soon — you're seeing it directly here for now.)"
+            )
+        db.add(Message(session_id=session_uuid, role="assistant", content=msg))
+        db.commit()
+        bot_messages.append(msg)
+
+    if state.step == "end" and session_row.status != "completed":
+        session_row.status = "completed"
+        db.commit()
+
+    return state, bot_messages
 
 
 @router.post("/sessions", response_model=StartSessionResponse)
@@ -196,56 +320,14 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
             db.commit()
 
     bot_messages = list(result.bot_messages)
+    state, bot_messages = _post_process_turn(state, session_uuid, db, session_row, bot_messages)
+    ACTIVE_SESSIONS[session_id] = state
 
-    if state.step == "interviewing" and not state.current_question:
-        question_text = _generate_next_question(state)
-        state.current_question = question_text
-        ACTIVE_SESSIONS[session_id] = state
-
-        plan_item = state.interview_plan[state.interview_index]
-        db.add(GeneratedQuestion(
-            session_id=session_uuid,
-            technology=plan_item,
-            question_text=question_text,
-            difficulty_tier=_difficulty_tier(state.candidate.experience),
-            answer_text=None,
-        ))
-        db.add(Message(session_id=session_uuid, role="assistant", content=question_text))
-        db.commit()
-        bot_messages.append(question_text)
-
-    if state.step in ("verify_email", "verify_phone") and not state.pending_otp:
-        code = _generate_mock_otp()
-        state.pending_otp = code
-        ACTIVE_SESSIONS[session_id] = state
-
-        if state.step == "verify_email":
-            target = state.candidate.email
-            sent = _send_otp_email(target, code)
-            if sent:
-                msg = f"We've sent a 6-digit verification code to {target}. Please enter it below."
-            else:
-                # SMTP not configured — don't block testing, show the code directly
-                msg = f"(Email delivery isn't configured yet — for testing, your code is: {code})"
-        else:
-            # phone verification stays mock until Firebase is wired in
-            target = state.candidate.phone
-            msg = (
-                f"[DEV MODE — mock OTP, not actually sent]\n"
-                f"Your verification code for {target} is: **{code}**\n"
-                f"(Real SMS via Firebase coming soon — you're seeing it directly here for now.)"
-            )
-
-        db.add(Message(session_id=session_uuid, role="assistant", content=msg))
-        db.commit()
-        bot_messages.append(msg)
-
-    if state.step == "end" and session_row.status != "completed":
-        session_row.status = "completed"
-        db.commit()
-
-    return MessageResponse(messages=bot_messages, step=state.step, candidate=vars(state.candidate))
-
+    return MessageResponse(
+        messages=bot_messages,
+        step=state.step,
+        candidate=vars(state.candidate),
+    )
 
 @router.post("/sessions/{session_id}/resume")
 def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession = Depends(get_db)):
@@ -276,66 +358,106 @@ def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession
     candidate_row.resume_path = dest_path
     db.commit()
 
-    state.step = next_step(state.step)
+    resume_text = _extract_resume_text(dest_path, ext)
+    extracted = _extract_resume_fields(resume_text)
+    state.pending_resume_data = extracted
+
+    state.step = "confirm_resume_data"
     ACTIVE_SESSIONS[session_id] = state
 
-    bot_reply = get_bot_message(state)
+    summary_lines = []
+    if extracted.get("email") is not None: summary_lines.append(f"Email: {extracted['email']}")
+    if extracted.get("phone") is not None: summary_lines.append(f"Phone: {extracted['phone']}")
+    if extracted.get("location") is not None: summary_lines.append(f"Location: {extracted['location']}")
+    if extracted.get("experience") is not None: summary_lines.append(f"Experience: {extracted['experience']} years")
+    if extracted.get("role") is not None: summary_lines.append(f"Role: {extracted['role']}")
+    if extracted.get("tech_stack"): summary_lines.append(f"Tech stack: {', '.join(extracted['tech_stack'])}")
+    if extracted.get("education"): summary_lines.append(f"Education: {extracted['education']}")
+    if extracted.get("linkedin"): summary_lines.append(f"LinkedIn: {extracted['linkedin']}")
+    if extracted.get("github"): summary_lines.append(f"GitHub: {extracted['github']}")
+
+    if summary_lines:
+        bot_reply = (
+            "Here's what I found on your resume:\n\n" + "\n".join(summary_lines) +
+            "\n\nEdit anything below, then confirm."
+        )
+    else:
+        bot_reply = "I couldn't extract much from that resume — please fill in your details below."
+
     db.add(Message(session_id=session_uuid, role="user", content=f"[uploaded resume: {file.filename}]"))
     db.add(Message(session_id=session_uuid, role="assistant", content=bot_reply))
     session_row.current_step = state.step
     db.commit()
 
-    return MessageResponse(messages=[bot_reply], step=state.step, candidate=vars(state.candidate))
+    return MessageResponse(
+            messages=[bot_reply], step=state.step, candidate=vars(state.candidate), extracted=extracted,
+        )
+@router.post("/sessions/{session_id}/resume/confirm", response_model=MessageResponse)
+def confirm_resume_data(session_id: str, body: ConfirmResumeRequest, db: SQLASession = Depends(get_db)):
+    state = ACTIVE_SESSIONS.get(session_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    if state.step not in ("confirm_resume_data",):
+        raise HTTPException(status_code=400, detail="Not expecting resume confirmation right now")
 
-
-@router.get("/sessions/{session_id}")
-def get_session(session_id: str, db: SQLASession = Depends(get_db)):
     try:
         session_uuid = uuid.UUID(session_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid session_id")
 
     session_row = get_session_or_404(db, session_uuid)
-    candidate_row = get_candidate_or_404(db, session_row.candidate_id)
 
-    return {
-        "session_id": session_id,
-        "step": session_row.current_step,
-        "status": session_row.status,
-        "candidate": {
-            "name": candidate_row.name,
-            "email": candidate_row.email,
-            "phone": candidate_row.phone,
-            "location": candidate_row.location,
-            "experience": candidate_row.experience,
-            "role": candidate_row.role,
-            "tech_stack": candidate_row.tech_stack,
-        },
+    state.pending_resume_data = {
+        "email": body.email or None,
+        "phone": body.phone or None,
+        "location": body.location or None,
+        "experience": body.experience or None,
+        "role": body.role or None,
+        "tech_stack": body.tech_stack or [],
+        "education": body.education or None,
+        "linkedin": body.linkedin or None,
+        "github": body.github or None,
     }
 
-def _send_otp_email(to_email: str, code: str) -> bool:
-    if not SMTP_USER or not SMTP_PASSWORD:
-        return False  # not configured — caller falls back to showing the code in chat
+    # catch duplicate email BEFORE it ever reaches the database
+    if body.email:
+        duplicate = (
+            db.query(Candidate)
+            .filter(Candidate.email == body.email, Candidate.id != session_row.candidate_id)
+            .first()
+        )
+        if duplicate is not None:
+            msg = "That email is already registered with another screening. Please edit the email field and try again."
+            db.add(Message(session_id=session_uuid, role="assistant", content=msg))
+            db.commit()
+            return MessageResponse(
+                messages=[msg], step=state.step, candidate=vars(state.candidate), extracted=state.pending_resume_data
+            )
+    if not body.email or not is_valid_email(body.email):
+        msg = "That doesn't look like a valid email address — please fix it and confirm again."
+        db.add(Message(session_id=session_uuid, role="assistant", content=msg))
+        db.commit()
+        return MessageResponse(messages=[msg], step=state.step, candidate=vars(state.candidate), extracted=state.pending_resume_data)
 
-    smtp_user: str = SMTP_USER
-    smtp_password: str = SMTP_PASSWORD
-    smtp_from: str = SMTP_FROM or smtp_user
+    if not body.phone or not is_valid_phone(body.phone):
+        msg = "That doesn't look like a valid phone number — please fix it and confirm again."
+        db.add(Message(session_id=session_uuid, role="assistant", content=msg))
+        db.commit()
+        return MessageResponse(messages=[msg], step=state.step, candidate=vars(state.candidate), extracted=state.pending_resume_data)
 
-    body = (
-        f"Your TalentScout verification code is: {code}\n\n"
-        f"If you didn't request this, you can ignore this email."
-    )
-    msg = MIMEText(body)
-    msg["Subject"] = "Your TalentScout verification code"
-    msg["From"] = smtp_from
-    msg["To"] = to_email
+    db.add(Message(session_id=session_uuid, role="user", content="[confirmed edited resume data]"))
+    result = handle_user_input(state, "yes")
+    state = result.state
+    ACTIVE_SESSIONS[session_id] = state
 
-    try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_password)
-            server.sendmail(smtp_from, [to_email], msg.as_string())
-        return True
-    except Exception as e:
-        print(f"OTP email send failed: {e}")
-        return False
+    for msg in result.bot_messages:
+        db.add(Message(session_id=session_uuid, role="assistant", content=msg))
+
+    session_row.current_step = state.step
+    db.commit()
+    _sync_candidate_row(db, session_row.candidate_id, state)
+
+    bot_messages = list(result.bot_messages)
+    state, bot_messages = _post_process_turn(state, session_uuid, db, session_row, bot_messages)
+
+    return MessageResponse(messages=bot_messages, step=state.step, candidate=vars(state.candidate))

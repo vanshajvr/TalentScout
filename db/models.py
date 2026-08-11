@@ -22,12 +22,15 @@ class Candidate(Base):
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     phone_verified: Mapped[bool] = mapped_column(Boolean, default=False)        
     location: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    education: Mapped[str | None] = mapped_column(String(255), nullable=True)
     experience: Mapped[float | None] = mapped_column(Float, nullable=True)
     role: Mapped[str | None] = mapped_column(String(120), nullable=True)
     tech_stack: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     resume_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     resume_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    linkedin_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    github_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     sessions: Mapped[list["Session"]] = relationship(back_populates="candidate")
 

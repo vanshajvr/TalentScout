@@ -1,0 +1,32 @@
+You are extracting structured candidate information from a resume.
+
+Resume text:
+{resume_text}
+
+Extract the following fields as strict JSON, with no extra commentary:
+{{
+  "email": "<email or null>",
+  "phone": "<phone number or null>",
+  "location": "<city/location or null>",
+  "experience": "<total years of professional experience as a number, or null>",
+  "role": "<most recent job title and company, e.g. 'Research and Automation Intern at XYZ Corp', or null if company isn't listed>",
+  "tech_stack": ["<technology 1>", "<technology 2>", ...],
+  "education": "<highest/most recent degree with institution, or null>",
+  "linkedin": "<LinkedIn profile URL, or null>",
+  "github": "<GitHub profile URL, or null>"
+}}
+
+Rules:
+- Only include information explicitly present in the resume text.
+- If a field can't be confidently determined, use null (or an empty array for tech_stack).
+- experience should be your best numeric estimate based on internship/work history dates
+  (not education dates) — if the candidate is a student with only internships, sum
+  internship durations; if nothing work-related is present, use 0.
+- education should reflect the most advanced or most recent degree listed, including
+  the field of study and institution if available.
+- Email addresses may appear as "[link: mailto:someone@example.com]" rather
+  than as plain visible text — extract the address following "mailto:".
+- linkedin/github may similarly appear as "[link: https://linkedin.com/in/...]"
+  or "[link: https://github.com/...]" rather than plain text — extract the
+  full URL from the link marker if the visible label alone isn't a real URL.
+- Output ONLY the JSON object, nothing else.
