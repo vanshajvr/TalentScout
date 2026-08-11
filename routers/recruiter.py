@@ -2,6 +2,7 @@ import csv
 import io
 import os
 import secrets
+import uuid
 
 from fastapi import APIRouter, HTTPException, Depends, Header
 from fastapi.responses import StreamingResponse
@@ -9,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Candidate, Session as SessionModel
+from db.models import Candidate, Session as SessionModel, GeneratedQuestion
 
 router = APIRouter(prefix="/recruiter")
 
@@ -76,6 +77,55 @@ def list_candidates(
             "created_at": c.created_at.isoformat() if c.created_at else None,
         }
         for c, s in rows
+    ]
+
+@router.get("/overview")
+def overview(db: SQLASession = Depends(get_db), _: None = Depends(require_recruiter)):
+    total = db.query(Candidate).count()
+    in_progress = db.query(SessionModel).filter(SessionModel.status == "in_progress").count()
+    completed = db.query(SessionModel).filter(SessionModel.status == "completed").count()
+    experiences: list[float] = [
+        c.experience
+        for c in db.query(Candidate).filter(Candidate.experience.isnot(None)).all()
+        if c.experience is not None
+    ]
+    avg_experience = round(sum(experiences) / len(experiences), 1) if experiences else None
+    return {
+        "total_candidates": total,
+        "in_progress": in_progress,
+        "completed": completed,
+        "avg_experience": avg_experience,
+    }
+
+
+@router.get("/candidates/{candidate_id}/questions")
+def candidate_questions(
+    candidate_id: str,
+    db: SQLASession = Depends(get_db),
+    _: None = Depends(require_recruiter),
+):
+    try:
+        cid = uuid.UUID(candidate_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid candidate_id")
+
+    session_row = db.query(SessionModel).filter(SessionModel.candidate_id == cid).first()
+    if session_row is None:
+        return []
+
+    questions = (
+        db.query(GeneratedQuestion)
+        .filter(GeneratedQuestion.session_id == session_row.id)
+        .all()
+    )
+    return [
+        {
+            "technology": q.technology,
+            "question_text": q.question_text,
+            "answer_text": q.answer_text,
+            "difficulty_tier": q.difficulty_tier,
+        }
+        for q in questions
     ]
 
 
