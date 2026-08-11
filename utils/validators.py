@@ -1,5 +1,7 @@
 import re
 
+from email_validator import validate_email, EmailNotValidError
+
 def is_valid_name(name: str) -> bool:
     name = name.strip()
     parts = name.split()
@@ -9,8 +11,12 @@ def is_valid_name(name: str) -> bool:
     )
 
 def is_valid_email(email: str) -> bool:
-    pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
-    return re.match(pattern, email) is not None
+    try:
+        validate_email(email, check_deliverability=True)
+        return True
+    except EmailNotValidError:
+        return False
+
 
 def is_valid_phone(phone: str) -> bool:
     phone = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
