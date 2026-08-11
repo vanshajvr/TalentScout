@@ -7,7 +7,41 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<div class="app">
+
+<div id="landing-view" class="landing">
+  <div class="landing-bg"><div class="bg-glow"></div><div class="bg-grid"></div></div>
+  <div class="landing-content">
+    <div class="landing-logo">TS</div>
+    <h1 class="landing-title">TalentScout</h1>
+    <p class="landing-sub">AI-assisted candidate screening for technology roles</p>
+    <div class="landing-cards">
+      <button class="landing-card" id="pick-candidate">
+        <div class="card-title">I'm a Candidate</div>
+        <div class="card-sub">Start your screening interview</div>
+      </button>
+      <a class="landing-card" href="/recruiter">
+        <div class="card-title">I'm a Hiring Recruiter</div>
+        <div class="card-sub">View and manage candidates</div>
+      </a>
+    </div>
+  </div>
+</div>
+
+<div id="home-view" class="app" style="display:none;">
+  <header>
+    <div class="logo">TS</div>
+    <div class="header-text">
+      <div class="title">TalentScout — Hiring Assistant</div>
+      <div class="status">Ready when you are</div>
+    </div>
+  </header>
+  <div class="home-body">
+    <p class="home-copy">This is a short, guided screening — a few questions about your background, then some tailored technical and behavioral questions. Takes about 10–15 minutes.</p>
+    <button id="start-screening-btn">Start Screening</button>
+  </div>
+</div>
+
+<div id="chat-view" class="app" style="display:none;">
   <header>
     <div class="logo">TS</div>
     <div class="header-text">
@@ -28,6 +62,7 @@
     <button id="send" disabled>Send</button>
   </footer>
 </div>
+
 <script src="/static/app.js"></script>
 </body>
 </html>

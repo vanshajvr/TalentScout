@@ -206,4 +206,13 @@ inputEl.addEventListener("keydown", (e) => {
 
 sendBtn.addEventListener("click", sendMessage);
 
-startSession();
+document.getElementById("pick-candidate").addEventListener("click", () => {
+  document.getElementById("landing-view").style.display = "none";
+  document.getElementById("home-view").style.display = "flex";
+});
+
+document.getElementById("start-screening-btn").addEventListener("click", () => {
+  document.getElementById("home-view").style.display = "none";
+  document.getElementById("chat-view").style.display = "flex";
+  startSession();
+});
