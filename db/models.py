@@ -76,3 +76,15 @@ class Message(Base):
     timestamp: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     session: Mapped["Session"] = relationship(back_populates="messages")
+
+class Recruiter(Base):
+    __tablename__ = "recruiters"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    name: Mapped[str] = mapped_column(String(120))
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(200))
+    password_salt: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)

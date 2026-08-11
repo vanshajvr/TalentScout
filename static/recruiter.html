@@ -11,17 +11,36 @@
 </head>
 <body>
 
-<div id="login-view" class="login-box">
-  <div style="display:flex; align-items:center; gap:10px; margin-bottom:20px;">
-    <div class="logo-icon" style="width:36px; height:36px; border-radius:10px;">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#fdf3ee" stroke-width="2" stroke-linecap="round" style="width:17px;height:17px;"><circle cx="10" cy="10" r="6.5"></circle><line x1="15.2" y1="15.2" x2="20" y2="20"></line></svg>
+<div id="login-view" class="login-box" style="max-width:420px;">
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px;">
+    <div class="logo-icon" style="width:44px; height:44px; border-radius:12px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fdf3ee" stroke-width="2" stroke-linecap="round" style="width:21px;height:21px;"><circle cx="10" cy="10" r="6.5"></circle><line x1="15.2" y1="15.2" x2="20" y2="20"></line></svg>
     </div>
-    <div style="font-size:19px; font-weight:700; color:var(--text);">TalentScout</div>
+    <div style="font-size:22px; font-weight:700; color:var(--text);">TalentScout</div>
   </div>
-  <div style="font-size:13px; color:var(--muted); margin-bottom:18px;">Recruiter login</div>
-  <input type="password" id="password-input" placeholder="Password">
-  <button class="landing-btn landing-btn-primary" id="login-btn" style="width:100%; text-align:center;">Log in</button>
-  <div id="login-error" class="error-text" style="display:none;"></div>
+
+  <div id="login-mode">
+    <div style="font-size:14px; color:var(--muted); margin-bottom:18px;">Recruiter login</div>
+    <input type="email" id="login-email" placeholder="Email">
+    <input type="password" id="login-password" placeholder="Password">
+    <button class="landing-btn landing-btn-primary" id="login-btn" style="width:100%; text-align:center;">Log in</button>
+    <div id="login-error" class="error-text" style="display:none;"></div>
+    <div style="font-size:13px; color:var(--muted); margin-top:16px; text-align:center;">
+      No account yet? <a href="#" id="show-signup" style="color:var(--accent);">Sign up</a>
+    </div>
+  </div>
+
+  <div id="signup-mode" style="display:none;">
+    <div style="font-size:14px; color:var(--muted); margin-bottom:18px;">Create recruiter account</div>
+    <input type="text" id="signup-name" placeholder="Full name">
+    <input type="email" id="signup-email" placeholder="Email">
+    <input type="password" id="signup-password" placeholder="Password">
+    <button class="landing-btn landing-btn-primary" id="signup-btn" style="width:100%; text-align:center;">Sign up</button>
+    <div id="signup-error" class="error-text" style="display:none;"></div>
+    <div style="font-size:13px; color:var(--muted); margin-top:16px; text-align:center;">
+      Already have an account? <a href="#" id="show-login" style="color:var(--accent);">Log in</a>
+    </div>
+  </div>
 </div>
 
 <div id="dash-view" class="rec-shell" style="display:none;">
@@ -45,11 +64,11 @@
       <div class="main-sub" id="candidate-count">Loading…</div>
     </div>
 
-    <div id="tab-overview" class="tab-panel">
+<div id="tab-overview" class="tab-panel">
       <div class="stat-grid" id="stat-grid"></div>
     </div>
 
-    <div id="tab-candidates" class="tab-panel hidden">
+    <div id="tab-candidates" class="tab-panel" style="display:none;">      
       <div class="filters">
         <input type="text" id="filter-role" placeholder="Role contains…">
         <input type="text" id="filter-tech" placeholder="Tech stack contains…">
@@ -78,8 +97,8 @@
       </div>
     </div>
 
-    <div id="tab-responses" class="tab-panel hidden">
-      <div class="responses-picker">
+<div id="tab-responses" class="tab-panel" style="display:none;">      
+  <div class="responses-picker">
         <select id="responses-candidate-select">
           <option value="">Select a candidate…</option>
         </select>

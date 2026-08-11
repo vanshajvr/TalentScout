@@ -22,6 +22,17 @@ const uploadTrigger = document.getElementById("upload-trigger");
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function formatMessage(text) {
+  const escaped = escapeHtml(text);
+  return escaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+}
+
 function updateProgress(step) {
   const idx = STEPS_ORDER.indexOf(step);
   const total = STEPS_ORDER.length - 1;
@@ -35,7 +46,7 @@ function updateProgress(step) {
 function addBubble(role, text, wasPasted = false) {
   const div = document.createElement("div");
   div.className = "bubble " + (role === "user" ? "user" : "bot");
-  div.textContent = text;
+  div.innerHTML = formatMessage(text);
   if (wasPasted) {
     const tag = document.createElement("span");
     tag.className = "pasted-tag";

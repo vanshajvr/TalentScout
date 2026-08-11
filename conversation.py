@@ -53,7 +53,7 @@ def get_bot_message(state: ConversationState) -> str:
         return (
             "Hello! 👋 I'm TalentScout's Hiring Assistant. "
             "I'll ask you a few questions for initial screening. "
-            "You can type **exit** anytime to end the conversation."
+            "Type **hi** or **hello** to begin, or **exit** anytime to end the conversation."
         )
     if step == "ask_name":
         return "Let's begin. What's your full name?"

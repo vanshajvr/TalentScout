@@ -2,6 +2,7 @@ import csv
 import io
 import os
 import secrets
+import hashlib
 import uuid
 
 from fastapi import APIRouter, HTTPException, Depends, Header
@@ -10,29 +11,81 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Candidate, Session as SessionModel, GeneratedQuestion, Message
+from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter
 
 router = APIRouter(prefix="/recruiter")
 
-RECRUITER_PASSWORD = os.environ.get("RECRUITER_PASSWORD", "changeme")
-VALID_TOKENS: set[str] = set()
+VALID_TOKENS: dict[str, str] = {}  # token -> recruiter_id
 
 
-class LoginRequest(BaseModel):
+def _hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
+    if salt is None:
+        salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100_000)
+    return digest.hex(), salt
+
+
+def _verify_password(password: str, salt: str, expected_hash: str) -> bool:
+    digest, _ = _hash_password(password, salt)
+    return secrets.compare_digest(digest, expected_hash)
+
+
+class SignupRequest(BaseModel):
+    name: str
+    email: str
     password: str
 
 
-class LoginResponse(BaseModel):
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class AuthResponse(BaseModel):
     token: str
+    name: str
 
 
-@router.post("/login", response_model=LoginResponse)
-def recruiter_login(body: LoginRequest):
-    if body.password != RECRUITER_PASSWORD:
-        raise HTTPException(status_code=401, detail="Incorrect password")
+@router.post("/signup", response_model=AuthResponse)
+def recruiter_signup(body: SignupRequest, db: SQLASession = Depends(get_db)):
+    existing = db.query(Recruiter).filter(Recruiter.email == body.email).first()
+    if existing is not None:
+        raise HTTPException(status_code=400, detail="An account with this email already exists")
+
+    password_hash, salt = _hash_password(body.password)
+    recruiter = Recruiter(name=body.name, email=body.email, password_hash=password_hash, password_salt=salt)
+    db.add(recruiter)
+    db.commit()
+    db.refresh(recruiter)
+
     token = secrets.token_urlsafe(32)
-    VALID_TOKENS.add(token)
-    return LoginResponse(token=token)
+    VALID_TOKENS[token] = str(recruiter.id)
+    return AuthResponse(token=token, name=recruiter.name)
+
+
+@router.post("/login", response_model=AuthResponse)
+def recruiter_login(body: LoginRequest, db: SQLASession = Depends(get_db)):
+    recruiter = db.query(Recruiter).filter(Recruiter.email == body.email).first()
+    if recruiter is None or not _verify_password(body.password, recruiter.password_salt, recruiter.password_hash):
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+    token = secrets.token_urlsafe(32)
+    VALID_TOKENS[token] = str(recruiter.id)
+    return AuthResponse(token=token, name=recruiter.name)
+
+
+@router.get("/me")
+def get_me(authorization: str = Header(None), db: SQLASession = Depends(get_db)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = authorization.removeprefix("Bearer ")
+    recruiter_id = VALID_TOKENS.get(token)
+    if not recruiter_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    recruiter = db.get(Recruiter, uuid.UUID(recruiter_id))
+    if recruiter is None:
+        raise HTTPException(status_code=401, detail="Account not found")
+    return {"name": recruiter.name, "email": recruiter.email}
 
 
 def require_recruiter(authorization: str = Header(None)):
@@ -78,6 +131,7 @@ def list_candidates(
         }
         for c, s in rows
     ]
+
 
 @router.get("/overview")
 def overview(db: SQLASession = Depends(get_db), _: None = Depends(require_recruiter)):
@@ -159,6 +213,7 @@ def export_candidates(
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=candidates.csv"},
     )
+
 
 class DeleteCandidatesRequest(BaseModel):
     candidate_ids: list[str]

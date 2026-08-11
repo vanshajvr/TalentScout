@@ -1,12 +1,8 @@
 const API = "";
 let token = localStorage.getItem("recruiter_token") || null;
-let cachedCandidates = [];
 
 const loginView = document.getElementById("login-view");
 const dashView = document.getElementById("dash-view");
-const passwordInput = document.getElementById("password-input");
-const loginBtn = document.getElementById("login-btn");
-const loginError = document.getElementById("login-error");
 const candidatesBody = document.getElementById("candidates-body");
 const candidateCount = document.getElementById("candidate-count");
 const exportBtn = document.getElementById("export-btn");
@@ -17,6 +13,18 @@ const responsesList = document.getElementById("responses-list");
 const deleteBtn = document.getElementById("delete-btn");
 const selectAll = document.getElementById("select-all");
 let selectedIds = new Set();
+
+const loginEmail = document.getElementById("login-email");
+const loginPassword = document.getElementById("login-password");
+const loginBtn = document.getElementById("login-btn");
+const loginError = document.getElementById("login-error");
+const signupName = document.getElementById("signup-name");
+const signupEmail = document.getElementById("signup-email");
+const signupPassword = document.getElementById("signup-password");
+const signupBtn = document.getElementById("signup-btn");
+const signupError = document.getElementById("signup-error");
+const loginMode = document.getElementById("login-mode");
+const signupMode = document.getElementById("signup-mode");
 
 function showDashboard() {
   loginView.style.display = "none";
@@ -66,7 +74,6 @@ async function loadCandidates() {
   const params = currentFilters();
   const res = await authedFetch(`${API}/recruiter/candidates?${params.toString()}`);
   const rows = await res.json();
-  cachedCandidates = rows;
   candidateCount.textContent = `${rows.length} candidate${rows.length === 1 ? "" : "s"}`;
 
   candidatesBody.innerHTML = "";
@@ -139,20 +146,33 @@ document.querySelectorAll(".rec-nav-item").forEach((item) => {
     document.getElementById(`tab-${item.dataset.tab}`).style.display = "block";
   });
 });
+
 responsesSelect.addEventListener("change", () => {
   loadCandidateQuestions(responsesSelect.value);
 });
 
+document.getElementById("show-signup").addEventListener("click", (e) => {
+  e.preventDefault();
+  loginMode.style.display = "none";
+  signupMode.style.display = "block";
+});
+
+document.getElementById("show-login").addEventListener("click", (e) => {
+  e.preventDefault();
+  signupMode.style.display = "none";
+  loginMode.style.display = "block";
+});
+
 loginBtn.addEventListener("click", async () => {
-  const password = passwordInput.value;
   loginError.style.display = "none";
   const res = await fetch(`${API}/recruiter/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ email: loginEmail.value, password: loginPassword.value }),
   });
   if (!res.ok) {
-    loginError.textContent = "Incorrect password.";
+    const err = await res.json().catch(() => ({}));
+    loginError.textContent = err.detail || "Incorrect email or password.";
     loginError.style.display = "block";
     return;
   }
@@ -162,8 +182,23 @@ loginBtn.addEventListener("click", async () => {
   showDashboard();
 });
 
-passwordInput.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") loginBtn.click();
+signupBtn.addEventListener("click", async () => {
+  signupError.style.display = "none";
+  const res = await fetch(`${API}/recruiter/signup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: signupName.value, email: signupEmail.value, password: signupPassword.value }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    signupError.textContent = err.detail || "Could not create account.";
+    signupError.style.display = "block";
+    return;
+  }
+  const data = await res.json();
+  token = data.token;
+  localStorage.setItem("recruiter_token", token);
+  showDashboard();
 });
 
 applyBtn.addEventListener("click", loadCandidates);
