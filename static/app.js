@@ -4,10 +4,10 @@ let lastKnownStep = null;
 let pastedThisTurn = false;
 
 const STEPS_ORDER = [
-  "greeting", "ask_name", "ask_email", "verify_email",
-  "ask_phone", "verify_phone", "ask_location",
-  "ask_experience", "ask_role", "upload_resume",
-  "ask_tech_stack", "confirm_tech_stack", "interviewing", "end"
+  "greeting", "ask_name", "upload_resume", "confirm_resume_data",
+  "ask_email", "verify_email", "ask_phone", "verify_phone",
+  "ask_location", "ask_experience", "ask_role", "ask_tech_stack",
+  "confirm_tech_stack", "interviewing", "end"
 ];
 
 const chatEl = document.getElementById("chat");
@@ -76,6 +76,104 @@ function showGeneratingPanel() {
   `;
   chatEl.appendChild(div);
   chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function showExtractingPanel() {
+  const div = document.createElement("div");
+  div.className = "gen-panel";
+  div.id = "typing-indicator";
+  div.innerHTML = `
+    <div class="label">Extracting information from your resume…</div>
+    <div class="gen-track"><div class="gen-fill"></div></div>
+  `;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function showResumeConfirmCard(extracted, sessionData) {
+  const div = document.createElement("div");
+  div.className = "bubble bot";
+  div.style.maxWidth = "90%";
+  div.innerHTML = `
+    <div style="margin-bottom:10px;">Here's what I found — edit anything, then confirm:</div>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <input id="edit-email" placeholder="Email" value="${extracted.email || ""}">
+      <input id="edit-phone" placeholder="Phone" value="${extracted.phone || ""}">
+      <input id="edit-location" placeholder="Location" value="${extracted.location || ""}">
+      <input id="edit-education" placeholder="Education" value="${extracted.education || ""}">
+      <input id="edit-experience" placeholder="Years of experience" value="${extracted.experience ?? ""}">
+      <input id="edit-role" placeholder="Role" value="${extracted.role || ""}">
+      <input id="edit-tech" placeholder="Tech stack (comma separated)" value="${(extracted.tech_stack || []).join(", ")}">
+      <input id="edit-linkedin" placeholder="LinkedIn URL" value="${extracted.linkedin || ""}">
+      <input id="edit-github" placeholder="GitHub URL" value="${extracted.github || ""}">
+    </div>
+    <button id="confirm-resume-btn" style="margin-top:10px;">Confirm & Continue</button>
+  `;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+
+  document.getElementById("confirm-resume-btn").addEventListener("click", async () => {
+    const confirmBtn = document.getElementById("confirm-resume-btn");
+    const fields = ["edit-email", "edit-phone", "edit-location", "edit-experience",
+                     "edit-role", "edit-tech", "edit-education", "edit-linkedin", "edit-github"];
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Confirming…";
+    fields.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = true;
+    });
+
+    setInputEnabled(false);
+    showTyping();
+
+    const payload = {
+      email: document.getElementById("edit-email").value.trim() || null,
+      phone: document.getElementById("edit-phone").value.trim() || null,
+      location: document.getElementById("edit-location").value.trim() || null,
+      experience: document.getElementById("edit-experience").value.trim() || null,
+      role: document.getElementById("edit-role").value.trim() || null,
+      tech_stack: document.getElementById("edit-tech").value.split(",").map(t => t.trim()).filter(Boolean),
+      education: document.getElementById("edit-education").value.trim() || null,
+      linkedin: document.getElementById("edit-linkedin").value.trim() || null,
+      github: document.getElementById("edit-github").value.trim() || null,
+    };
+
+    try {
+      const res = await fetch(`${API}/sessions/${sessionId}/resume/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      removeTyping();
+      data.messages.forEach((m) => addBubble("assistant", m));
+      lastKnownStep = data.step;
+      updateProgress(data.step);
+
+      if (data.step === "confirm_resume_data") {
+        // server bounced it back (e.g. duplicate email) — reopen the card for editing
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = "Confirm & Continue";
+        fields.forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.disabled = false;
+        });
+        setInputEnabled(false); // stay in card-editing mode, not free text
+      } else {
+        setInputEnabled(true);
+      }
+    } catch (err) {
+      removeTyping();
+      addBubble("assistant", "Something went wrong — please try again.");
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Confirm & Continue";
+      fields.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = false;
+      });
+      setInputEnabled(true);
+    }
+  });
 }
 
 function removeTyping() {
@@ -175,14 +273,19 @@ resumeInput.addEventListener("change", async () => {
   if (!file) return;
   addBubble("user", `📎 ${file.name}`);
   setInputEnabled(false);
-  showTyping();
+  uploadTrigger.disabled = true;
+  showExtractingPanel();;
   const formData = new FormData();
   formData.append("file", file);
   try {
     const res = await fetch(`${API}/sessions/${sessionId}/resume`, { method: "POST", body: formData });
     const data = await res.json();
     removeTyping();
-    data.messages.forEach((m) => addBubble("assistant", m));
+    if (data.step === "confirm_resume_data" && data.extracted) {
+      showResumeConfirmCard(data.extracted);
+    } else {
+      data.messages.forEach((m) => addBubble("assistant", m));
+    }
     lastKnownStep = data.step;
     updateProgress(data.step);
     uploadTrigger.style.display = "none";

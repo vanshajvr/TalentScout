@@ -15,6 +15,7 @@ html, body {
   margin: 0; height: 100%;
   font-family: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
   background: var(--bg); color: var(--text);
+  overflow: hidden;
 }
 body { display: flex; padding: 0; }
 .logo-icon {
@@ -29,7 +30,9 @@ body { display: flex; padding: 0; }
   width: 100vw; height: 100vh;
   display: grid; grid-template-columns: 280px 1fr;
   background: var(--panel);
-}.sidebar {
+  min-height: 0;
+}
+.sidebar {
   background: var(--bubble-bot); border-right: 1px solid var(--border);
   padding: 28px 22px; display: flex; flex-direction: column; overflow-y: auto;
 }
@@ -42,7 +45,7 @@ body { display: flex; padding: 0; }
 .sidebar-context-title { font-size: 13px; color: var(--text); font-weight: 500; }
 .sidebar-context-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
 
-.main-panel { display: flex; flex-direction: column; min-width: 0; }
+.main-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
 .main-header { padding: 20px 32px; border-bottom: 1px solid var(--border); }
 .main-title { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; color: var(--text); line-height: 1.1; }
 .main-sub { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
@@ -196,4 +199,7 @@ tbody tr:hover { background: var(--bg); }
   .landing-right { min-height: 240px; }
   .landing-title { font-size: 32px; }
   body { padding: 0; }
+}
+button:disabled {
+  cursor: not-allowed;
 }
