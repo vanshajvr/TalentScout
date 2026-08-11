@@ -9,3 +9,4 @@ email-validator
 pdfplumber
 python-docx
 groq
+pydantic
