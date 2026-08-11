@@ -1,6 +1,6 @@
-
 const API = "";
 let token = localStorage.getItem("recruiter_token") || null;
+let cachedCandidates = [];
 
 const loginView = document.getElementById("login-view");
 const dashView = document.getElementById("dash-view");
@@ -11,10 +11,14 @@ const candidatesBody = document.getElementById("candidates-body");
 const candidateCount = document.getElementById("candidate-count");
 const exportBtn = document.getElementById("export-btn");
 const applyBtn = document.getElementById("apply-filters");
+const statGrid = document.getElementById("stat-grid");
+const responsesSelect = document.getElementById("responses-candidate-select");
+const responsesList = document.getElementById("responses-list");
 
 function showDashboard() {
   loginView.style.display = "none";
   dashView.style.display = "flex";
+  loadOverview();
   loadCandidates();
 }
 
@@ -31,21 +35,37 @@ function currentFilters() {
   return params;
 }
 
-async function loadCandidates() {
-  candidateCount.textContent = "Loading…";
-  const params = currentFilters();
-  const res = await fetch(`${API}/recruiter/candidates?${params.toString()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+async function authedFetch(url) {
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (res.status === 401) {
     localStorage.removeItem("recruiter_token");
     token = null;
     dashView.style.display = "none";
     loginView.style.display = "block";
-    return;
+    throw new Error("unauthorized");
   }
+  return res;
+}
+
+async function loadOverview() {
+  const res = await authedFetch(`${API}/recruiter/overview`);
+  const data = await res.json();
+  statGrid.innerHTML = `
+    <div class="stat-card"><div class="stat-value">${data.total_candidates}</div><div class="stat-label">Total candidates</div></div>
+    <div class="stat-card"><div class="stat-value">${data.in_progress}</div><div class="stat-label">In progress</div></div>
+    <div class="stat-card"><div class="stat-value">${data.completed}</div><div class="stat-label">Completed</div></div>
+    <div class="stat-card"><div class="stat-value">${data.avg_experience ?? "—"}</div><div class="stat-label">Avg. experience (yrs)</div></div>
+  `;
+}
+
+async function loadCandidates() {
+  candidateCount.textContent = "Loading…";
+  const params = currentFilters();
+  const res = await authedFetch(`${API}/recruiter/candidates?${params.toString()}`);
   const rows = await res.json();
+  cachedCandidates = rows;
   candidateCount.textContent = `${rows.length} candidate${rows.length === 1 ? "" : "s"}`;
+
   candidatesBody.innerHTML = "";
   rows.forEach((c) => {
     const tr = document.createElement("tr");
@@ -63,7 +83,55 @@ async function loadCandidates() {
     `;
     candidatesBody.appendChild(tr);
   });
+
+  responsesSelect.innerHTML = '<option value="">Select a candidate…</option>';
+  rows.forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = c.name || c.email || c.id;
+    responsesSelect.appendChild(opt);
+  });
 }
+
+async function loadCandidateQuestions(candidateId) {
+  if (!candidateId) {
+    responsesList.innerHTML = "";
+    return;
+  }
+  responsesList.innerHTML = '<div class="empty-note">Loading…</div>';
+  const res = await authedFetch(`${API}/recruiter/candidates/${candidateId}/questions`);
+  const questions = await res.json();
+
+  if (questions.length === 0) {
+    responsesList.innerHTML = '<div class="empty-note">No interview responses yet for this candidate.</div>';
+    return;
+  }
+
+  responsesList.innerHTML = "";
+  questions.forEach((q) => {
+    const div = document.createElement("div");
+    div.className = "qa-item";
+    div.innerHTML = `
+      <div class="qa-tech">${q.technology} · ${q.difficulty_tier}</div>
+      <div class="qa-question">${q.question_text}</div>
+      <div class="qa-answer">${q.answer_text || "(no answer recorded yet)"}</div>
+    `;
+    responsesList.appendChild(div);
+  });
+}
+
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.add("hidden"));
+    tab.classList.add("active");
+    document.getElementById(`tab-${tab.dataset.tab}`).classList.remove("hidden");
+  });
+});
+
+responsesSelect.addEventListener("change", () => {
+  loadCandidateQuestions(responsesSelect.value);
+});
 
 loginBtn.addEventListener("click", async () => {
   const password = passwordInput.value;
