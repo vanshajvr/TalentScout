@@ -5,3 +5,7 @@ sqlalchemy
 psycopg2-binary
 python-multipart
 python-dotenv
+email-validator
+pdfplumber
+python-docx
+groq
