@@ -8,109 +8,84 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
-<style>
-  body { align-items: flex-start; }
-  .dash { width: 100%; max-width: 1100px; height: auto; max-height: none; }
-  .login-box { max-width: 360px; margin: 80px auto; padding: 28px; background: var(--panel); border-radius: 14px; border: 1px solid var(--border); }
-  .login-box input { width: 100%; padding: 10px 12px; margin: 10px 0; background: #171b26; color: var(--text); border: 1px solid var(--border); border-radius: 8px; }
-  .login-box button { width: 100%; }
-  .error-text { color: var(--warn); font-size: 13px; margin-top: 6px; }
-  .filters { display: flex; gap: 8px; flex-wrap: wrap; padding: 16px 20px; border-bottom: 1px solid var(--border); }
-  .filters input, .filters select { padding: 8px 10px; background: #171b26; color: var(--text); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--panel); }
-  .table-wrap { overflow-x: auto; max-height: 60vh; overflow-y: auto; }
-  .badge { padding: 2px 8px; border-radius: 6px; font-size: 11px; }
-  .badge.completed { background: #16532933; color: #4ade80; }
-  .badge.in_progress { background: #78350f33; color: #fbbf24; }
-
-  .tabs { display: flex; gap: 4px; padding: 0 20px; border-bottom: 1px solid var(--border); }
-  .tab {
-    background: none; border: none; color: var(--muted); padding: 12px 16px;
-    font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent;
-    transition: color .15s, border-color .15s;
-  }
-  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
-  .tab-panel { padding: 20px; }
-  .tab-panel.hidden { display: none; }
-
-  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
-  .stat-card { background: var(--bubble-bot); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
-  .stat-value { font-size: 26px; font-weight: 600; }
-  .stat-label { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
-
-  .responses-picker { margin-bottom: 16px; }
-  .responses-picker select { width: 100%; max-width: 360px; padding: 10px 12px; background: #171b26; color: var(--text); border: 1px solid var(--border); border-radius: 8px; }
-  .qa-item { background: var(--bubble-bot); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
-  .qa-tech { font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
-  .qa-question { font-weight: 500; margin-bottom: 8px; }
-  .qa-answer { color: var(--muted); font-size: 13.5px; line-height: 1.5; }
-  .empty-note { color: var(--muted); font-size: 13.5px; padding: 20px 0; }
-</style>
 </head>
 <body>
 
 <div id="login-view" class="login-box">
-  <h2 style="margin-top:0;">Recruiter Login</h2>
+  <div style="display:flex; align-items:center; gap:10px; margin-bottom:20px;">
+    <div class="logo-icon" style="width:36px; height:36px; border-radius:10px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fdf3ee" stroke-width="2" stroke-linecap="round" style="width:17px;height:17px;"><circle cx="10" cy="10" r="6.5"></circle><line x1="15.2" y1="15.2" x2="20" y2="20"></line></svg>
+    </div>
+    <div style="font-size:19px; font-weight:700; color:var(--text);">TalentScout</div>
+  </div>
+  <div style="font-size:13px; color:var(--muted); margin-bottom:18px;">Recruiter login</div>
   <input type="password" id="password-input" placeholder="Password">
-  <button id="login-btn" style="width:100%;">Log In</button>
+  <button class="landing-btn landing-btn-primary" id="login-btn" style="width:100%; text-align:center;">Log in</button>
   <div id="login-error" class="error-text" style="display:none;"></div>
 </div>
 
-<div id="dash-view" class="app dash" style="display:none;">
-  <header>
-    <div class="logo">TS</div>
-    <div class="header-text">
-      <div class="title">Recruiter Dashboard</div>
-      <div class="status" id="candidate-count">Loading…</div>
+<div id="dash-view" class="rec-shell" style="display:none;">
+  <div class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fdf3ee" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"></circle><line x1="15.2" y1="15.2" x2="20" y2="20"></line></svg>
+      </div>
+      <div class="sidebar-brand-name">TalentScout</div>
     </div>
-  </header>
-
-  <nav class="tabs">
-    <button class="tab active" data-tab="overview">Overview</button>
-    <button class="tab" data-tab="candidates">Candidates</button>
-    <button class="tab" data-tab="responses">Interview Responses</button>
-  </nav>
-
-  <div id="tab-overview" class="tab-panel">
-    <div class="stat-grid" id="stat-grid"></div>
-  </div>
-
-  <div id="tab-candidates" class="tab-panel hidden">
-    <div class="filters">
-      <input type="text" id="filter-role" placeholder="Role contains…">
-      <input type="text" id="filter-tech" placeholder="Tech stack contains…">
-      <input type="number" id="filter-experience" placeholder="Min experience (yrs)" step="0.5">
-      <select id="filter-status">
-        <option value="">Any status</option>
-        <option value="in_progress">In progress</option>
-        <option value="completed">Completed</option>
-      </select>
-      <button id="apply-filters">Apply</button>
-      <button id="export-btn">Export CSV</button>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th><th>Email</th><th>Phone</th><th>Location</th>
-            <th>Experience</th><th>Role</th><th>Tech Stack</th>
-            <th>Resume</th><th>Status</th><th>Applied</th>
-          </tr>
-        </thead>
-        <tbody id="candidates-body"></tbody>
-      </table>
+    <div class="rec-nav">
+      <button class="rec-nav-item active" data-tab="overview">Overview</button>
+      <button class="rec-nav-item" data-tab="candidates">Candidates</button>
+      <button class="rec-nav-item" data-tab="responses">Interview Responses</button>
     </div>
   </div>
 
-  <div id="tab-responses" class="tab-panel hidden">
-    <div class="responses-picker">
-      <select id="responses-candidate-select">
-        <option value="">Select a candidate…</option>
-      </select>
+  <div class="rec-main">
+    <div class="main-header">
+      <div class="main-title">Recruiter Dashboard</div>
+      <div class="main-sub" id="candidate-count">Loading…</div>
     </div>
-    <div id="responses-list"></div>
+
+    <div id="tab-overview" class="tab-panel">
+      <div class="stat-grid" id="stat-grid"></div>
+    </div>
+
+    <div id="tab-candidates" class="tab-panel hidden">
+      <div class="filters">
+        <input type="text" id="filter-role" placeholder="Role contains…">
+        <input type="text" id="filter-tech" placeholder="Tech stack contains…">
+        <input type="number" id="filter-experience" placeholder="Min experience (yrs)" step="0.5">
+        <select id="filter-status">
+          <option value="">Any status</option>
+          <option value="in_progress">In progress</option>
+          <option value="completed">Completed</option>
+        </select>
+        <button id="apply-filters">Apply</button>
+        <button id="export-btn">Export CSV</button>
+        <button id="delete-btn" style="background:var(--warn);">Delete Selected</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:30px;"><input type="checkbox" id="select-all"></th>
+              <th>Name</th><th>Email</th><th>Phone</th><th>Location</th>
+              <th>Experience</th><th>Role</th><th>Tech Stack</th>
+              <th>Resume</th><th>Status</th><th>Applied</th>
+            </tr>
+          </thead>
+          <tbody id="candidates-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="tab-responses" class="tab-panel hidden">
+      <div class="responses-picker">
+        <select id="responses-candidate-select">
+          <option value="">Select a candidate…</option>
+        </select>
+      </div>
+      <div class="qa-list" id="responses-list"></div>
+    </div>
   </div>
 </div>
 

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Candidate, Session as SessionModel, GeneratedQuestion
+from db.models import Candidate, Session as SessionModel, GeneratedQuestion, Message
 
 router = APIRouter(prefix="/recruiter")
 
@@ -159,3 +159,36 @@ def export_candidates(
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=candidates.csv"},
     )
+
+class DeleteCandidatesRequest(BaseModel):
+    candidate_ids: list[str]
+
+
+@router.post("/candidates/delete")
+def delete_candidates(
+    body: DeleteCandidatesRequest,
+    db: SQLASession = Depends(get_db),
+    _: None = Depends(require_recruiter),
+):
+    deleted = 0
+    for cid_str in body.candidate_ids:
+        try:
+            cid = uuid.UUID(cid_str)
+        except ValueError:
+            continue
+
+        session_ids = [
+            s.id for s in db.query(SessionModel).filter(SessionModel.candidate_id == cid).all()
+        ]
+        if session_ids:
+            db.query(GeneratedQuestion).filter(GeneratedQuestion.session_id.in_(session_ids)).delete(synchronize_session=False)
+            db.query(Message).filter(Message.session_id.in_(session_ids)).delete(synchronize_session=False)
+            db.query(SessionModel).filter(SessionModel.candidate_id == cid).delete(synchronize_session=False)
+
+        candidate_row = db.get(Candidate, cid)
+        if candidate_row is not None:
+            db.delete(candidate_row)
+            deleted += 1
+
+    db.commit()
+    return {"deleted": deleted}

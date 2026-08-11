@@ -14,10 +14,13 @@ const applyBtn = document.getElementById("apply-filters");
 const statGrid = document.getElementById("stat-grid");
 const responsesSelect = document.getElementById("responses-candidate-select");
 const responsesList = document.getElementById("responses-list");
+const deleteBtn = document.getElementById("delete-btn");
+const selectAll = document.getElementById("select-all");
+let selectedIds = new Set();
 
 function showDashboard() {
   loginView.style.display = "none";
-  dashView.style.display = "flex";
+  dashView.style.display = "grid";
   loadOverview();
   loadCandidates();
 }
@@ -70,6 +73,7 @@ async function loadCandidates() {
   rows.forEach((c) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
+      <td><input type="checkbox" class="row-check" data-id="${c.id}" ${selectedIds.has(c.id) ? "checked" : ""}></td>
       <td>${c.name || "—"}</td>
       <td>${c.email || "—"}${c.email_verified ? " ✅" : ""}</td>
       <td>${c.phone || "—"}${c.phone_verified ? " ✅" : ""}</td>
@@ -82,6 +86,13 @@ async function loadCandidates() {
       <td>${c.created_at ? new Date(c.created_at).toLocaleDateString() : "—"}</td>
     `;
     candidatesBody.appendChild(tr);
+  });
+
+  document.querySelectorAll(".row-check").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      if (cb.checked) selectedIds.add(cb.dataset.id);
+      else selectedIds.delete(cb.dataset.id);
+    });
   });
 
   responsesSelect.innerHTML = '<option value="">Select a candidate…</option>';
@@ -120,15 +131,14 @@ async function loadCandidateQuestions(candidateId) {
   });
 }
 
-document.querySelectorAll(".tab").forEach((tab) => {
-  tab.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
-    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.add("hidden"));
-    tab.classList.add("active");
-    document.getElementById(`tab-${tab.dataset.tab}`).classList.remove("hidden");
+document.querySelectorAll(".rec-nav-item").forEach((item) => {
+  item.addEventListener("click", () => {
+    document.querySelectorAll(".rec-nav-item").forEach((i) => i.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach((p) => (p.style.display = "none"));
+    item.classList.add("active");
+    document.getElementById(`tab-${item.dataset.tab}`).style.display = "block";
   });
 });
-
 responsesSelect.addEventListener("change", () => {
   loadCandidateQuestions(responsesSelect.value);
 });
@@ -169,6 +179,33 @@ exportBtn.addEventListener("click", () => {
       link.download = "candidates.csv";
       link.click();
     });
+});
+
+selectAll.addEventListener("change", () => {
+  document.querySelectorAll(".row-check").forEach((cb) => {
+    cb.checked = selectAll.checked;
+    if (selectAll.checked) selectedIds.add(cb.dataset.id);
+    else selectedIds.delete(cb.dataset.id);
+  });
+});
+
+deleteBtn.addEventListener("click", async () => {
+  if (selectedIds.size === 0) {
+    alert("Select at least one candidate first.");
+    return;
+  }
+  const confirmed = confirm(`Delete ${selectedIds.size} candidate(s)? This can't be undone.`);
+  if (!confirmed) return;
+
+  await fetch(`${API}/recruiter/candidates/delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ candidate_ids: Array.from(selectedIds) }),
+  });
+
+  selectedIds.clear();
+  loadOverview();
+  loadCandidates();
 });
 
 if (token) showDashboard();

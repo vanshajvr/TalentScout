@@ -12,75 +12,100 @@
 <body>
 
 <div id="landing-view" class="landing">
-  <div class="landing-bg"><div class="bg-glow"></div><div class="bg-grid"></div></div>
-  <div class="landing-content">
-    <div class="landing-logo">TS</div>
-    <h1 class="landing-title">TalentScout</h1>
-    <p class="landing-sub">AI-assisted candidate screening for technology roles</p>
-    <div class="landing-cards">
-      <button class="landing-card" id="pick-candidate">
-        <div class="card-title">I'm a Candidate</div>
-        <div class="card-sub">Start your screening interview</div>
-      </button>
-      <a class="landing-card" href="/recruiter">
-        <div class="card-title">I'm a Hiring Recruiter</div>
-        <div class="card-sub">View and manage candidates</div>
-      </a>
+  <div class="landing-left">
+    <div class="landing-brand">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fdf3ee" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"></circle><line x1="15.2" y1="15.2" x2="20" y2="20"></line></svg>
+      </div>
+      <div class="landing-brand-name">TalentScout</div>
+    </div>
+    <h1 class="landing-title">Screening,<br>done with care.</h1>
+    <p class="landing-sub">An AI-assisted first-round interview that adapts to you, verifies who you are, and respects your time.</p>
+    <div class="landing-ctas">
+      <button class="landing-btn landing-btn-primary" id="pick-candidate">I'm a candidate — start screening →</button>
+      <a class="landing-btn landing-btn-secondary" href="/recruiter">I'm a hiring recruiter →</a>
     </div>
     <div class="landing-features">
       <div class="feature">
-        <div class="feature-icon">🎯</div>
-        <div class="feature-title">Adaptive Interviewing</div>
-        <div class="feature-copy">Questions personalize in real time based on your role, experience, and tech stack.</div>
+        <div class="feature-title">Adaptive interviewing</div>
+        <div class="feature-copy">Questions personalize in real time based on your role and experience.</div>
       </div>
       <div class="feature">
-        <div class="feature-icon">✅</div>
-        <div class="feature-title">Verified Identity</div>
-        <div class="feature-copy">Email and phone verification keeps screening data accurate and trustworthy.</div>
+        <div class="feature-title">Verified identity</div>
+        <div class="feature-copy">Email and phone verification keeps screening data accurate.</div>
       </div>
       <div class="feature">
-        <div class="feature-icon">⚡</div>
-        <div class="feature-title">Fast & Transparent</div>
-        <div class="feature-copy">A guided 10–15 minute conversation — no forms, no waiting rooms.</div>
+        <div class="feature-title">Fast and transparent</div>
+        <div class="feature-copy">A guided 10–15 minute conversation, start to finish.</div>
       </div>
+    </div>
+  </div>
+<div class="landing-right">
+    <div class="landing-shape" style="width:340px; height:340px; top:50%; left:50%; transform:translate(-50%,-50%); background:#e8ddcc; opacity:0.7;"></div>
+    <div class="landing-shape" style="width:150px; height:150px; top:32%; left:38%; background:#d9b48f;"></div>
+    <div class="landing-shape" style="width:90px; height:90px; top:62%; left:64%; background:#a8462f;"></div>
+    <div class="landing-float-card">
+      <div class="landing-float-step">Step 6 of 13</div>
+      <div class="landing-float-track"><div class="landing-float-fill"></div></div>
+      <div class="landing-float-question">"What draws you to backend engineering?"</div>
     </div>
   </div>
 </div>
 
-<div id="home-view" class="app" style="display:none;">
-  <header>
-    <div class="logo">TS</div>
-    <div class="header-text">
-      <div class="title">TalentScout — Hiring Assistant</div>
-      <div class="status">Ready when you are</div>
+<div id="home-view" class="shell" style="display:none;">
+  <div class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fdf3ee" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"></circle><line x1="15.2" y1="15.2" x2="20" y2="20"></line></svg>
+      </div>
+      <div class="sidebar-brand-name">TalentScout</div>
     </div>
-  </header>
-  <div class="home-body">
-    <p class="home-copy">This is a short, guided screening — a few questions about your background, then some tailored technical and behavioral questions. Takes about 10–15 minutes.</p>
-    <button id="start-screening-btn">Start Screening</button>
+    <div class="sidebar-label">What to expect</div>
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      <div style="font-size:12.5px; color:var(--text);">A few questions about your background</div>
+      <div style="font-size:12.5px; color:var(--muted);">Email and phone verification</div>
+      <div style="font-size:12.5px; color:var(--muted);">Tailored technical questions</div>
+    </div>
+  </div>
+  <div class="main-panel home-shell">
+    <div class="home-content">
+      <div class="home-title">Ready when you are.</div>
+      <p class="home-copy">This takes about 10–15 minutes. Answer honestly and at your own pace.</p>
+      <button class="landing-btn landing-btn-primary" id="start-screening-btn" style="display:inline-block;">Start screening →</button>
+    </div>
   </div>
 </div>
 
-<div id="chat-view" class="app" style="display:none;">
-  <header>
-    <div class="logo">TS</div>
-    <div class="header-text">
-      <div class="title">TalentScout — Hiring Assistant</div>
-      <div class="status" id="status-line">Starting screening…</div>
+<div id="chat-view" class="shell" style="display:none;">
+  <div class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fdf3ee" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"></circle><line x1="15.2" y1="15.2" x2="20" y2="20"></line></svg>
+      </div>
+      <div class="sidebar-brand-name">TalentScout</div>
     </div>
-  </header>
-  <div class="progress-wrap">
-    <div class="progress-track"><div class="progress-fill-static" id="progress-fill" style="width:0%"></div></div>
-    <div class="progress-label" id="progress-label">Getting started</div>
+    <div class="sidebar-label">Progress</div>
+    <div class="sidebar-track"><div class="sidebar-fill" id="progress-fill" style="width:0%"></div></div>
+    <div class="sidebar-step" id="progress-label">Getting started</div>
+    <div class="sidebar-label">Status</div>
+    <div class="sidebar-context-title" id="status-line">Starting screening…</div>
   </div>
-  <div id="chat"></div>
-  <div id="paste-note" class="paste-note" style="display:none;">This answer was pasted, not typed.</div>
-  <footer>
-    <input type="file" id="resume-input" accept=".pdf,.docx" style="display:none;">
-    <button type="button" id="upload-trigger" class="upload-btn" style="display:none;">Upload Resume</button>
-    <textarea id="input" rows="1" placeholder="Type your answer…" disabled></textarea>
-    <button id="send" disabled>Send</button>
-  </footer>
+  <div class="main-panel">
+    <div class="main-header">
+      <div class="main-title">TalentScout</div>
+      <div class="main-sub">Hiring Assistant</div>
+    </div>
+    <div id="chat"></div>
+    <div id="paste-note" class="paste-note" style="display:none;">This answer was pasted, not typed.</div>
+    <footer>
+      <input type="file" id="resume-input" accept=".pdf,.docx" style="display:none;">
+      <button type="button" id="upload-trigger" class="upload-btn" style="display:none;">Upload Resume</button>
+      <textarea id="input" rows="1" placeholder="Type your answer…" disabled></textarea>
+      <button id="send" class="send-btn" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fdf3ee" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="20" y2="12"></line><polyline points="14 6 20 12 14 18"></polyline></svg>
+      </button>
+    </footer>
+  </div>
 </div>
 
 <script src="/static/app.js"></script>
