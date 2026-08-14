@@ -46,6 +46,12 @@ function currentFilters() {
   return params;
 }
 
+function formatError(err) {
+  if (typeof err.detail === "string") return err.detail;
+  if (Array.isArray(err.detail) && err.detail[0]?.msg) return err.detail[0].msg;
+  return "Could not create account.";
+}
+
 async function authedFetch(url) {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (res.status === 401) {
@@ -194,11 +200,11 @@ signupBtn.addEventListener("click", async () => {
       invite_code: document.getElementById("signup-invite").value }),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    signupError.textContent = err.detail || "Could not create account.";
-    signupError.style.display = "block";
-    return;
-  }
+  const err = await res.json().catch(() => ({}));
+  signupError.textContent = formatError(err);
+  signupError.style.display = "block";
+  return;
+}
   const data = await res.json();
   token = data.token;
   localStorage.setItem("recruiter_token", token);
