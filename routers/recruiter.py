@@ -34,6 +34,7 @@ class SignupRequest(BaseModel):
     name: str
     email: str
     password: str
+    invite_code: str
 
 
 class LoginRequest(BaseModel):
@@ -48,6 +49,10 @@ class AuthResponse(BaseModel):
 
 @router.post("/signup", response_model=AuthResponse)
 def recruiter_signup(body: SignupRequest, db: SQLASession = Depends(get_db)):
+    expected_code = os.environ.get("RECRUITER_INVITE_CODE")
+    if not expected_code or not secrets.compare_digest(body.invite_code, expected_code):
+        raise HTTPException(status_code=403, detail="Invalid invite code")
+
     existing = db.query(Recruiter).filter(Recruiter.email == body.email).first()
     if existing is not None:
         raise HTTPException(status_code=400, detail="An account with this email already exists")

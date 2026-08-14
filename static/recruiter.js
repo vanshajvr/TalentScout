@@ -187,7 +187,11 @@ signupBtn.addEventListener("click", async () => {
   const res = await fetch(`${API}/recruiter/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: signupName.value, email: signupEmail.value, password: signupPassword.value }),
+    body: JSON.stringify({ 
+      name: signupName.value, 
+      email: signupEmail.value, 
+      password: signupPassword.value, 
+      invite_code: document.getElementById("signup-invite").value }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

@@ -91,7 +91,7 @@ responses.
 ## Setup & Run Locally
 
 ```bash
-git clone https://github.com/<your-username>/TalentScout.git
+git clone https://github.com/vanshajvr/TalentScout.git
 cd TalentScout
 
 python3 -m venv .venv
