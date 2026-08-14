@@ -64,6 +64,11 @@ class GeneratedQuestion(Base):
     difficulty_tier: Mapped[str] = mapped_column(String(20))
     answer_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    correctness_score: Mapped[int | None] = mapped_column(nullable=True)
+    reasoning_score: Mapped[int | None] = mapped_column(nullable=True)
+    communication_score: Mapped[int | None] = mapped_column(nullable=True)
+    score_justification: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     session: Mapped["Session"] = relationship(back_populates="questions")
 
 class Message(Base):

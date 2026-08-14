@@ -197,6 +197,29 @@ def _generate_next_question(state: ConversationState) -> str:
             f"tell me about your experience with {plan_item}.)"
         )
     
+def _score_answer(question_text: str, answer_text: str, technology: str, experience: str) -> dict:
+    prompt_template = _load_prompt("prompts/answer_scoring_prompt.txt")
+    prompt = prompt_template.format(
+        question_text=question_text,
+        answer_text=answer_text,
+        technology=technology,
+        experience=experience,
+    )
+    try:
+        raw = llm.generate(prompt, temperature=0).strip()
+        if raw.startswith("```"):
+            raw = raw.strip("`").replace("json", "", 1).strip()
+        result = json.loads(raw)
+        return {
+            "correctness": int(result["correctness"]),
+            "reasoning": int(result["reasoning"]),
+            "communication": int(result["communication"]),
+            "justification": result.get("justification"),
+        }
+    except Exception as e:
+        print(f"Answer scoring failed: {e}")
+        return {"correctness": None, "reasoning": None, "communication": None, "justification": None}
+    
 def _post_process_turn(state, session_uuid, db, session_row, bot_messages):
     if state.step == "interviewing" and not state.current_question and not state.current_question:
         question_text = _generate_next_question(state)
@@ -317,6 +340,11 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
         )
         if q_row is not None:
             q_row.answer_text = body.text
+            score = _score_answer(q_row.question_text, body.text, q_row.technology, state.candidate.experience)
+            q_row.correctness_score = score["correctness"]
+            q_row.reasoning_score = score["reasoning"]
+            q_row.communication_score = score["communication"]
+            q_row.score_justification = score["justification"]
             db.commit()
 
     bot_messages = list(result.bot_messages)
