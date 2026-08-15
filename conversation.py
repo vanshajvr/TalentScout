@@ -162,14 +162,8 @@ def handle_user_input(state: ConversationState, user_input: str) -> StepResult:
             state.interview_index = 0
             state.current_question = ""
             state.qa_history = []
-
-            if not candidate.email_verified:
-                state.step = "verify_email"
-            elif not candidate.phone_verified:
-                state.step = "verify_phone"
-            else:
-                state.step = "interviewing"
-                return StepResult(state=state, bot_messages=bot_messages)
+            state.step = "interviewing"
+            return StepResult(state=state, bot_messages=bot_messages)
         bot_messages.append(get_bot_message(state))
         return StepResult(state=state, bot_messages=bot_messages)
 
@@ -183,27 +177,6 @@ def handle_user_input(state: ConversationState, user_input: str) -> StepResult:
         state.pending_otp = ""
         state.otp_attempts = 0
 
-    elif step == "verify_email":
-        if user_input.strip() == state.pending_otp and state.pending_otp:
-            candidate.email_verified = True
-            state.pending_otp = ""
-            state.otp_attempts = 0
-        else:
-            state.otp_attempts += 1
-            if state.otp_attempts >= 3:
-                state.step = "ask_email"
-                state.pending_otp = ""
-                state.otp_attempts = 0
-                candidate.email = ""
-                bot_messages.append(
-                    "Too many incorrect attempts. Let's try again — what's your email address?"
-                )
-                return StepResult(state=state, bot_messages=bot_messages)
-            bot_messages.append(
-                f"That code doesn't match (attempt {state.otp_attempts}). Please try again."
-            )
-            return StepResult(state=state, bot_messages=bot_messages)
-
     elif step == "ask_phone":
         if not is_valid_phone(user_input):
             bot_messages.append(
@@ -215,26 +188,6 @@ def handle_user_input(state: ConversationState, user_input: str) -> StepResult:
         state.pending_otp = ""
         state.otp_attempts = 0
 
-    elif step == "verify_phone":
-        if user_input.strip() == state.pending_otp and state.pending_otp:
-            candidate.phone_verified = True
-            state.pending_otp = ""
-            state.otp_attempts = 0
-        else:
-            state.otp_attempts += 1
-            if state.otp_attempts >= 3:
-                state.step = "ask_phone"
-                state.pending_otp = ""
-                state.otp_attempts = 0
-                candidate.phone = ""
-                bot_messages.append(
-                    "Too many incorrect attempts. Let's try again — what's your phone number?"
-                )
-                return StepResult(state=state, bot_messages=bot_messages)
-            bot_messages.append(
-                f"That code doesn't match (attempt {state.otp_attempts}). Please try again."
-            )
-            return StepResult(state=state, bot_messages=bot_messages)
 
     elif step == "ask_location":
         candidate.location = user_input

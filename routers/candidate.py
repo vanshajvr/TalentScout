@@ -7,9 +7,6 @@ import pdfplumber
 from docx import Document as DocxDocument
 import json
 
-import smtplib
-from email.mime.text import MIMEText
-
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as SQLASession
@@ -29,12 +26,6 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 llm = GroqLLM()
 ACTIVE_SESSIONS: dict[str, ConversationState] = {}
-
-SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USER = os.environ.get("SMTP_USER")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
-SMTP_FROM = os.environ.get("SMTP_FROM", SMTP_USER)
 
 class StartSessionResponse(BaseModel):
     session_id: str
@@ -101,37 +92,6 @@ def _load_prompt(path: str) -> str:
 
 
 _SYSTEM_PROMPT = _load_prompt("prompts/system_prompt.txt")
-
-
-def _generate_mock_otp() -> str:
-    return str(secrets.randbelow(1_000_000)).zfill(6)
-
-def _send_otp_email(to_email: str, code: str) -> bool:
-    if not SMTP_USER or not SMTP_PASSWORD:
-        return False
-
-    smtp_user: str = SMTP_USER
-    smtp_password: str = SMTP_PASSWORD
-    smtp_from: str = SMTP_FROM or smtp_user
-
-    body = (
-        f"Your TalentScout verification code is: {code}\n\n"
-        f"If you didn't request this, you can ignore this email."
-    )
-    msg = MIMEText(body)
-    msg["Subject"] = "Your TalentScout verification code"
-    msg["From"] = smtp_from
-    msg["To"] = to_email
-
-    try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_password)
-            server.sendmail(smtp_from, [to_email], msg.as_string())
-        return True
-    except Exception as e:
-        print(f"OTP email send failed: {e}")
-        return False
 
 
 def _sync_candidate_row(db: SQLASession, candidate_id: uuid.UUID, state: ConversationState) -> None:
@@ -235,28 +195,6 @@ def _post_process_turn(state, session_uuid, db, session_row, bot_messages):
         db.add(Message(session_id=session_uuid, role="assistant", content=question_text))
         db.commit()
         bot_messages.append(question_text)
-
-    if state.step in ("verify_email", "verify_phone") and not state.pending_otp:
-        code = _generate_mock_otp()
-        state.pending_otp = code
-        if state.step == "verify_email":
-            target = state.candidate.email
-            sent = _send_otp_email(target, code)
-            msg = (
-                f"We've sent a 6-digit verification code to {target}. Please enter it below."
-                if sent else
-                f"(Email delivery isn't configured yet — for testing, your code is: {code})"
-            )
-        else:
-            target = state.candidate.phone
-            msg = (
-                f"[DEV MODE — mock OTP, not actually sent]\n"
-                f"Your verification code for {target} is: **{code}**\n"
-                f"(Real SMS via Firebase coming soon — you're seeing it directly here for now.)"
-            )
-        db.add(Message(session_id=session_uuid, role="assistant", content=msg))
-        db.commit()
-        bot_messages.append(msg)
 
     if state.step == "end" and session_row.status != "completed":
         session_row.status = "completed"

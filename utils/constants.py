@@ -1,6 +1,6 @@
 STEPS = [
     "greeting", "ask_name", "upload_resume", "confirm_resume_data",
-    "verify_email", "verify_phone", "interviewing", "end"
+    "interviewing", "end"
 ]
 EXIT_KEYWORDS = {"exit", "quit", "stop", "goodbye", "bye"}
 
