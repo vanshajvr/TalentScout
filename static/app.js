@@ -278,13 +278,11 @@ function goToLanding() {
   landing.style.display = "grid";
 }
 
-document.getElementById("back-to-landing-home").addEventListener("click", (e) => {
-  e.preventDefault();
+document.getElementById("back-to-landing-home").addEventListener("click", () => {
   goToLanding();
 });
 
-document.getElementById("back-to-landing-chat").addEventListener("click", (e) => {
-  e.preventDefault();
+document.getElementById("back-to-landing-chat").addEventListener("click", () => {
   const confirmed = confirm("Leaving now will end this screening. Are you sure?");
   if (confirmed) goToLanding();
 });
@@ -344,7 +342,14 @@ sendBtn.addEventListener("click", sendMessage);
 document.getElementById("pick-candidate").addEventListener("click", () => {
   const landing = document.getElementById("landing-view");
   const home = document.getElementById("home-view");
-  landing.classList.add("view-fade-out", "hidden");
+
+  landing.classList.add("view-fade-out");
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      landing.classList.add("hidden");
+    });
+  });
+
   setTimeout(() => {
     landing.style.display = "none";
     home.style.display = "grid";
@@ -355,7 +360,14 @@ document.getElementById("pick-candidate").addEventListener("click", () => {
 document.getElementById("start-screening-btn").addEventListener("click", () => {
   const home = document.getElementById("home-view");
   const chat = document.getElementById("chat-view");
-  home.classList.add("view-fade-out", "hidden");
+
+  home.classList.add("view-fade-out");
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      home.classList.add("hidden");
+    });
+  });
+
   setTimeout(() => {
     home.style.display = "none";
     chat.style.display = "grid";
