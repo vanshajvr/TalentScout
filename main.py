@@ -22,3 +22,7 @@ def serve_frontend():
 @app.get("/recruiter")
 def serve_recruiter_frontend():
     return FileResponse("static/recruiter.html")
+
+@app.get("/login")
+def serve_login_frontend():
+    return FileResponse("static/login.html")

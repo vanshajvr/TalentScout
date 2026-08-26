@@ -375,3 +375,14 @@ document.getElementById("start-screening-btn").addEventListener("click", () => {
     startSession();
   }, 200);
 });
+
+const revealObserver = new IntersectionObserver((entries) => {
+  entries.forEach((entry) => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add("visible");
+      revealObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.2 });
+
+document.querySelectorAll(".reveal").forEach((el) => revealObserver.observe(el));

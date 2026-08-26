@@ -8,48 +8,84 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 </head>
 <body>
 
-<div id="landing-view" class="landing">
-  <div class="landing-left">
-    <div class="landing-brand">
+<div id="landing-view" class="landing-new">
+  <nav class="landing-nav">
+    <div class="landing-nav-brand">
       <div class="logo-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="#fdf3ee" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"></circle><line x1="15.2" y1="15.2" x2="20" y2="20"></line></svg>
       </div>
-      <div class="landing-brand-name">TalentScout</div>
+      <span class="landing-nav-name">TalentScout</span>
     </div>
-    <h1 class="landing-title">Screening,<br>done with care.</h1>
-    <p class="landing-sub">An AI-assisted first-round interview that adapts to you, verifies who you are, and respects your time.</p>
-    <div class="landing-ctas">
-      <button class="landing-btn landing-btn-primary" id="pick-candidate">I'm a candidate — start screening →</button>
-      <a class="landing-btn landing-btn-secondary" href="/recruiter">I'm a hiring recruiter →</a>
+    <div class="landing-nav-links">
+      <span class="landing-nav-link">Product</span>
+      <span class="landing-nav-link">For teams</span>
+      <a href="/login" class="landing-btn landing-btn-primary landing-nav-cta">Get started</a>
     </div>
-    <div class="landing-features">
-      <div class="feature">
-        <div class="feature-title">Adaptive interviewing</div>
-        <div class="feature-copy">Questions personalize in real time based on your role and experience.</div>
+  </nav>
+
+  <section class="landing-hero">
+    <div class="landing-hero-text">
+      <h1 class="landing-title">Screening,<br>done with care.</h1>
+      <p class="landing-sub">Adaptive interviewing, rubric-based scoring, and org-based team management for hiring teams of any size.</p>
+      <a href="/login" class="landing-btn landing-btn-primary">Get started →</a>
+    </div>
+    <div class="landing-hero-demo" id="demo-preview">
+      <div class="demo-bubble demo-bubble-bot">What draws you to backend engineering?</div>
+      <div class="demo-bubble demo-bubble-user">I like systems where correctness actually matters...</div>
+    </div>
+  </section>
+
+  <section class="landing-timeline-section">
+    <div class="landing-eyebrow">How it works</div>
+    <div class="landing-timeline">
+      <div class="timeline-step reveal">
+        <div class="timeline-icon"><i class="ti ti-upload"></i></div>
+        <div class="timeline-label">Upload resume</div>
       </div>
-      <div class="feature">
-        <div class="feature-title">Verified identity</div>
-        <div class="feature-copy">Email and phone verification keeps screening data accurate.</div>
+      <div class="timeline-step reveal">
+        <div class="timeline-icon"><i class="ti ti-adjustments"></i></div>
+        <div class="timeline-label">Adaptive interview</div>
       </div>
-      <div class="feature">
-        <div class="feature-title">Fast and transparent</div>
-        <div class="feature-copy">A guided 10–15 minute conversation, start to finish.</div>
+      <div class="timeline-step reveal">
+        <div class="timeline-icon"><i class="ti ti-chart-bar"></i></div>
+        <div class="timeline-label">Auto-scored</div>
+      </div>
+      <div class="timeline-step reveal">
+        <div class="timeline-icon"><i class="ti ti-users"></i></div>
+        <div class="timeline-label">Recruiter review</div>
       </div>
     </div>
-  </div>
-<div class="landing-right">
-    <div class="landing-shape" style="width:340px; height:340px; top:50%; left:50%; transform:translate(-50%,-50%); background:#e8ddcc; opacity:0.7;"></div>
-    <div class="landing-shape" style="width:150px; height:150px; top:32%; left:38%; background:#d9b48f;"></div>
-    <div class="landing-shape" style="width:90px; height:90px; top:62%; left:64%; background:#a8462f;"></div>
-    <div class="landing-float-card">
-      <div class="landing-float-step">Step 6 of 13</div>
-      <div class="landing-float-track"><div class="landing-float-fill"></div></div>
-      <div class="landing-float-question">"What draws you to backend engineering?"</div>
+  </section>
+
+  <section class="landing-roles-section">
+    <div class="landing-eyebrow">Built for every role</div>
+    <div class="landing-role-grid">
+      <div class="role-card reveal">
+        <i class="ti ti-message-circle"></i>
+        <div class="role-card-title">Candidates</div>
+        <div class="role-card-copy">A conversation, not a form — talk through your background at your pace.</div>
+      </div>
+      <div class="role-card reveal">
+        <i class="ti ti-list-check"></i>
+        <div class="role-card-title">Recruiters</div>
+        <div class="role-card-copy">Scored transcripts, not raw text — see who's worth a callback fast.</div>
+      </div>
+      <div class="role-card reveal">
+        <i class="ti ti-building"></i>
+        <div class="role-card-title">HR teams</div>
+        <div class="role-card-copy">Org-isolated data, invite-based access, full team visibility.</div>
+      </div>
     </div>
-  </div>
+  </section>
+
+  <footer class="landing-footer">
+    <span>TalentScout</span>
+    <span>Privacy · Terms</span>
+  </footer>
 </div>
 
 <div id="home-view" class="shell" style="display:none;">
