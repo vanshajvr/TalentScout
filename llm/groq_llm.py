@@ -4,7 +4,7 @@ from llm.base import BaseLLM
 
 
 class GroqLLM(BaseLLM):
-    def __init__(self, model_name: str = "llama-3.3-70b-versatile"):
+    def __init__(self, model_name: str = "openai/gpt-oss-120b"):
         self.model_name = model_name
         self.client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
