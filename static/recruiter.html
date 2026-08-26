@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 </head>
 <body>
 
@@ -36,7 +37,12 @@
     <input type="text" id="signup-name" placeholder="Full name">
     <input type="email" id="signup-email" placeholder="Email">
     <input type="password" id="signup-password" placeholder="Password">
-    <input type="text" id="signup-invite" placeholder="Invite code">
+    <div style="position:relative;">
+      <input type="password" id="signup-invite" placeholder="Invite code" style="padding-right:40px;">
+      <button type="button" id="toggle-invite-visibility" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--muted); padding:4px; display:flex;">
+        <i class="ti ti-eye" id="invite-eye-icon"></i>
+      </button>
+    </div>    
     <button class="landing-btn landing-btn-primary" id="signup-btn" style="width:100%; text-align:center;">Sign up</button>
     <div id="signup-error" class="error-text" style="display:none;"></div>
     <div style="font-size:13px; color:var(--muted); margin-top:16px; text-align:center;">

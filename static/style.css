@@ -279,45 +279,41 @@ button:disabled {
   .landing-hero { padding: 32px 20px; }
 }
 
-.tier-select {
-  width: 100vw; height: 100vh; display: grid; grid-template-columns: 0.85fr 1.15fr;
-}
-.tier-panel {
-  background: var(--bubble-bot); border-right: 0.5px solid var(--border);
-  padding: 64px 56px; display: flex; flex-direction: column; justify-content: space-between;
-}
-.tier-panel-title { font-size: 40px; font-weight: 700; color: var(--text); line-height: 1.2; margin-bottom: 16px; letter-spacing: -0.02em; }
-.tier-panel-sub { font-size: 16px; color: var(--muted); line-height: 1.6; max-width: 320px; }
-.tier-back-link {
-  background: none; border: none; padding: 0; font-size: 14px; color: var(--muted);
-  cursor: pointer; text-align: left; font-family: inherit;
-}
+.tier-select { width: 100vw; height: 100vh; display: grid; grid-template-columns: 0.9fr 1.1fr; }
 
-.tier-options {
-  padding: 64px 72px; display: flex; flex-direction: column; gap: 16px;
-  justify-content: center; max-width: 640px; margin: 0 auto; width: 100%;
-}
-.tier-card {
-  background: var(--panel); border: 0.5px solid var(--border); border-radius: 16px;
-  padding: 28px 32px; display: flex; align-items: center; gap: 20px;
-  cursor: pointer; text-align: left; font-family: inherit; transition: border-color 0.15s, transform 0.1s;
-}
+.tier-panel { display: flex; flex-direction: column; padding: 48px 64px; background: var(--bubble-bot); border-right: 0.5px solid var(--border); }
+.tier-panel-top { display: flex; align-items: center; justify-content: space-between; }
+.tier-panel-mid { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.tier-panel-title { font-size: 52px; font-weight: 700; color: var(--text); line-height: 1.15; margin-bottom: 20px; letter-spacing: -0.02em; }
+.tier-panel-sub { font-size: 17px; color: var(--muted); line-height: 1.6; max-width: 360px; margin-bottom: 44px; }
+.tier-panel-features { display: flex; flex-direction: column; gap: 18px; }
+.tier-panel-feature { display: flex; align-items: center; gap: 12px; font-size: 14.5px; color: var(--text); font-weight: 500; }
+.tier-panel-feature i { color: var(--accent); font-size: 19px; }
+
+.back-link { background: none; border: none; padding: 0; font-size: 13px; color: var(--muted); cursor: pointer; font-family: inherit; }
+
+.tier-options { padding: 64px 72px; display: flex; flex-direction: column; gap: 24px; justify-content: center; max-width: 680px; margin: 0 auto; width: 100%; }
+.tier-card { background: var(--panel); border: 0.5px solid var(--border); border-radius: 18px; padding: 32px 36px; display: flex; align-items: center; gap: 22px; cursor: pointer; text-align: left; font-family: inherit; transition: border-color 0.15s, transform 0.1s; }
 .tier-card:hover { border-color: var(--accent-soft); transform: translateY(-1px); }
 .tier-card-featured { border: 2px solid var(--accent); }
-.tier-card-icon {
-  width: 56px; height: 56px; border-radius: 14px; background: var(--bubble-bot);
-  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  font-size: 26px; color: var(--accent);
-}
+.tier-card-icon { width: 60px; height: 60px; border-radius: 16px; background: var(--bubble-bot); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 28px; color: var(--accent); }
 .tier-card-body { flex: 1; }
 .tier-card-heading { display: flex; align-items: center; gap: 10px; }
-.tier-card-heading span:first-child { font-size: 19px; font-weight: 600; color: var(--text); }
+.tier-card-heading span:first-child { font-size: 20px; font-weight: 600; color: var(--text); }
 .tier-badge { background: var(--accent); color: #fdf3ee; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
-.tier-card-copy { font-size: 14.5px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+.tier-card-copy { font-size: 15px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
 .tier-card-arrow { font-size: 22px; color: var(--muted); flex-shrink: 0; }
 
 @media (max-width: 780px) {
   .tier-select { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
-  .tier-panel { padding: 32px 24px; }
-  .tier-options { padding: 32px 24px; max-width: 100%; }
+  .tier-panel, .tier-options { padding: 32px 24px; }
+  .tier-panel-title { font-size: 32px; }
 }
+
+.landing-hero-demo { min-height: 140px; }
+.demo-bubble:last-child::after {
+  content: "▌";
+  animation: blink 0.9s step-end infinite;
+  opacity: 0.5;
+}
+@keyframes blink { 50% { opacity: 0; } }

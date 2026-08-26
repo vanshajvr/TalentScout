@@ -169,6 +169,18 @@ document.getElementById("show-login").addEventListener("click", (e) => {
   loginMode.style.display = "block";
 });
 
+document.getElementById("toggle-invite-visibility").addEventListener("click", () => {
+  const input = document.getElementById("signup-invite");
+  const icon = document.getElementById("invite-eye-icon");
+  if (input.type === "password") {
+    input.type = "text";
+    icon.className = "ti ti-eye-off";
+  } else {
+    input.type = "password";
+    icon.className = "ti ti-eye";
+  }
+});
+
 loginBtn.addEventListener("click", async () => {
   loginError.style.display = "none";
   const res = await fetch(`${API}/recruiter/login`, {
