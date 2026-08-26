@@ -266,3 +266,14 @@ deleteBtn.addEventListener("click", async () => {
 });
 
 if (token) showDashboard();
+
+function goBackOrHome() {
+  if (document.referrer && document.referrer.includes(window.location.host)) {
+    history.back();
+  } else {
+    window.location.href = "/";
+  }
+}
+
+document.getElementById("back-link-login")?.addEventListener("click", goBackOrHome);
+document.getElementById("back-link-dash")?.addEventListener("click", goBackOrHome);

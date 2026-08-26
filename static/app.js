@@ -269,13 +269,17 @@ async function sendMessage() {
 }
 
 function goToLanding() {
-  document.getElementById("home-view").style.display = "none";
-  document.getElementById("chat-view").style.display = "none";
-  document.getElementById("home-view").classList.remove("view-fade-in");
-  document.getElementById("chat-view").classList.remove("view-fade-in");
-  const landing = document.getElementById("landing-view");
-  landing.classList.remove("view-fade-out", "hidden");
-  landing.style.display = "grid";
+  if (document.referrer && document.referrer.includes(window.location.host)) {
+    history.back();
+  } else {
+    document.getElementById("home-view").style.display = "none";
+    document.getElementById("chat-view").style.display = "none";
+    document.getElementById("home-view").classList.remove("view-fade-in");
+    document.getElementById("chat-view").classList.remove("view-fade-in");
+    const landing = document.getElementById("landing-view");
+    landing.classList.remove("view-fade-out", "hidden");
+    landing.style.display = "grid";
+  }
 }
 
 const backHomeBtn = document.getElementById("back-to-landing-home");

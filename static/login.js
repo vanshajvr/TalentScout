@@ -5,5 +5,9 @@ document.querySelectorAll(".tier-card").forEach((card) => {
 });
 
 document.getElementById("back-to-landing-login").addEventListener("click", () => {
-  window.location.href = "/";
+  if (document.referrer && document.referrer.includes(window.location.host)) {
+    history.back();
+  } else {
+    window.location.href = "/";
+  }
 });
