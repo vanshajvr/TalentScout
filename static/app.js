@@ -268,6 +268,27 @@ async function sendMessage() {
   setInputEnabled(true);
 }
 
+function goToLanding() {
+  document.getElementById("home-view").style.display = "none";
+  document.getElementById("chat-view").style.display = "none";
+  document.getElementById("home-view").classList.remove("view-fade-in");
+  document.getElementById("chat-view").classList.remove("view-fade-in");
+  const landing = document.getElementById("landing-view");
+  landing.classList.remove("view-fade-out", "hidden");
+  landing.style.display = "grid";
+}
+
+document.getElementById("back-to-landing-home").addEventListener("click", (e) => {
+  e.preventDefault();
+  goToLanding();
+});
+
+document.getElementById("back-to-landing-chat").addEventListener("click", (e) => {
+  e.preventDefault();
+  const confirmed = confirm("Leaving now will end this screening. Are you sure?");
+  if (confirmed) goToLanding();
+});
+
 resumeInput.addEventListener("change", async () => {
   const file = resumeInput.files[0];
   if (!file) return;
@@ -321,12 +342,24 @@ inputEl.addEventListener("keydown", (e) => {
 sendBtn.addEventListener("click", sendMessage);
 
 document.getElementById("pick-candidate").addEventListener("click", () => {
-  document.getElementById("landing-view").style.display = "none";
-  document.getElementById("home-view").style.display = "grid";
+  const landing = document.getElementById("landing-view");
+  const home = document.getElementById("home-view");
+  landing.classList.add("view-fade-out", "hidden");
+  setTimeout(() => {
+    landing.style.display = "none";
+    home.style.display = "grid";
+    home.classList.add("view-fade-in");
+  }, 200);
 });
 
 document.getElementById("start-screening-btn").addEventListener("click", () => {
-  document.getElementById("home-view").style.display = "none";
-  document.getElementById("chat-view").style.display = "grid";
-  startSession();
+  const home = document.getElementById("home-view");
+  const chat = document.getElementById("chat-view");
+  home.classList.add("view-fade-out", "hidden");
+  setTimeout(() => {
+    home.style.display = "none";
+    chat.style.display = "grid";
+    chat.classList.add("view-fade-in");
+    startSession();
+  }, 200);
 });

@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter
+from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter, SessionLog
 
 router = APIRouter(prefix="/recruiter")
 
@@ -252,3 +252,24 @@ def delete_candidates(
 
     db.commit()
     return {"deleted": deleted}
+
+@router.get("/candidates/{candidate_id}/logs")
+def candidate_logs(
+    candidate_id: str,
+    db: SQLASession = Depends(get_db),
+    _: None = Depends(require_recruiter),
+):
+    cid = uuid.UUID(candidate_id)
+    session_row = db.query(SessionModel).filter(SessionModel.candidate_id == cid).first()
+    if session_row is None:
+        return []
+    logs = (
+        db.query(SessionLog)
+        .filter(SessionLog.session_id == session_row.id)
+        .order_by(SessionLog.timestamp)
+        .all()
+    )
+    return [
+        {"event_type": l.event_type, "detail": l.detail, "timestamp": l.timestamp.isoformat()}
+        for l in logs
+    ]

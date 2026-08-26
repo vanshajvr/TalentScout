@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion
+from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, SessionLog
 from conversation import ConversationState, handle_user_input, get_bot_message
 from llm.groq_llm import GroqLLM
 from utils.constants import BEHAVIORAL_QUESTION_TEMPLATES
@@ -123,6 +123,9 @@ def _difficulty_tier(experience: str) -> str:
         return "applied"
     return "advanced"
 
+def _log_event(db: SQLASession, session_uuid: uuid.UUID, event_type: str, detail: str):
+    db.add(SessionLog(session_id=session_uuid, event_type=event_type, detail=detail))
+    db.commit()
 
 def _format_history(qa_history: list[tuple[str, str]]) -> str:
     if not qa_history:
@@ -176,9 +179,11 @@ def _score_answer(question_text: str, answer_text: str, technology: str, experie
             "communication": int(result["communication"]),
             "justification": result.get("justification"),
         }
+    
     except Exception as e:
         print(f"Answer scoring failed: {e}")
         return {"correctness": None, "reasoning": None, "communication": None, "justification": None}
+        
     
 def _post_process_turn(state, session_uuid, db, session_row, bot_messages):
     if state.step == "interviewing" and not state.current_question and not state.current_question:
@@ -266,6 +271,9 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
         db.add(Message(session_id=session_uuid, role="assistant", content=msg))
 
     session_row.current_step = state.step
+    if session_row.current_step != state.step:
+        _log_event(db, session_uuid, "step_transition", f"{session_row.current_step} -> {state.step}")
+    session_row.current_step = state.step
     db.commit()
 
     _sync_candidate_row(db, session_row.candidate_id, state)
@@ -328,6 +336,10 @@ def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession
     extracted = _extract_resume_fields(resume_text)
     state.pending_resume_data = extracted
 
+    extracted = _extract_resume_fields(resume_text)
+    if not extracted:
+        _log_event(db, session_uuid, "error", "Resume extraction returned empty result")
+
     state.step = "confirm_resume_data"
     ACTIVE_SESSIONS[session_id] = state
 
@@ -352,6 +364,9 @@ def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession
 
     db.add(Message(session_id=session_uuid, role="user", content=f"[uploaded resume: {file.filename}]"))
     db.add(Message(session_id=session_uuid, role="assistant", content=bot_reply))
+    session_row.current_step = state.step
+    if session_row.current_step != state.step:
+        _log_event(db, session_uuid, "step_transition", f"{session_row.current_step} -> {state.step}")
     session_row.current_step = state.step
     db.commit()
 
@@ -419,6 +434,9 @@ def confirm_resume_data(session_id: str, body: ConfirmResumeRequest, db: SQLASes
     for msg in result.bot_messages:
         db.add(Message(session_id=session_uuid, role="assistant", content=msg))
 
+    session_row.current_step = state.step
+    if session_row.current_step != state.step:
+        _log_event(db, session_uuid, "step_transition", f"{session_row.current_step} -> {state.step}")
     session_row.current_step = state.step
     db.commit()
     _sync_candidate_row(db, session_row.candidate_id, state)

@@ -203,3 +203,7 @@ tbody tr:hover { background: var(--bg); }
 button:disabled {
   cursor: not-allowed;
 }
+.view-fade-out { opacity: 1; transition: opacity 0.2s ease; }
+.view-fade-out.hidden { opacity: 0; }
+.view-fade-in { opacity: 0; animation: fadeIn 0.35s ease forwards; }
+@keyframes fadeIn { to { opacity: 1; } }

@@ -96,3 +96,14 @@ class Recruiter(Base):
     password_hash: Mapped[str] = mapped_column(String(200))
     password_salt: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+class SessionLog(Base):
+    __tablename__ = "session_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sessions.id"))
+    event_type: Mapped[str] = mapped_column(String(20))  # "step_transition" | "error" | "info"
+    detail: Mapped[str] = mapped_column(Text)
+    timestamp: Mapped[datetime] = mapped_column(default=datetime.utcnow)
