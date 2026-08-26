@@ -317,3 +317,29 @@ button:disabled {
   opacity: 0.5;
 }
 @keyframes blink { 50% { opacity: 0; } }
+
+.timeline-step {
+  background: none; border: none; padding: 0; font-family: inherit; cursor: pointer; text-align: left;
+}
+.timeline-icon { transition: background 0.2s, border-color 0.2s; }
+.timeline-step.active .timeline-icon { background: var(--accent); border-color: var(--accent); }
+.timeline-step.active .timeline-icon i { color: #fdf3ee; }
+.timeline-step.active .timeline-label { color: var(--accent); }
+
+.timeline-detail {
+  margin-top: 32px; background: var(--panel); border: 0.5px solid var(--border);
+  border-radius: 14px; padding: 28px 32px; max-width: 620px;
+}
+.timeline-detail-title { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+.timeline-detail-body { font-size: 14px; color: var(--muted); line-height: 1.6; }
+
+.role-card { cursor: pointer; text-align: left; font-family: inherit; transition: border-color 0.2s, transform 0.15s; }
+.role-card.active { border-color: var(--accent); border-width: 2px; }
+
+.role-preview { margin-top: 24px; }
+.preview-mock { background: var(--bubble-bot); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 10px; max-width: 480px; }
+.preview-table { gap: 8px; }
+.preview-row { display: flex; justify-content: space-between; background: var(--panel); border-radius: 8px; padding: 10px 16px; font-size: 13.5px; color: var(--text); }
+.preview-score { font-weight: 600; color: var(--accent); }
+.preview-org-row { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--text); }
+.preview-org-row i { color: var(--accent); font-size: 16px; }

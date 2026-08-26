@@ -39,44 +39,46 @@
   <section class="landing-timeline-section">
     <div class="landing-eyebrow">How it works</div>
     <div class="landing-timeline">
-      <div class="timeline-step reveal">
+      <button class="timeline-step reveal active" data-step="upload">
         <div class="timeline-icon"><i class="ti ti-upload"></i></div>
         <div class="timeline-label">Upload resume</div>
-      </div>
-      <div class="timeline-step reveal">
+      </button>
+      <button class="timeline-step reveal" data-step="interview">
         <div class="timeline-icon"><i class="ti ti-adjustments"></i></div>
         <div class="timeline-label">Adaptive interview</div>
-      </div>
-      <div class="timeline-step reveal">
+      </button>
+      <button class="timeline-step reveal" data-step="scored">
         <div class="timeline-icon"><i class="ti ti-chart-bar"></i></div>
         <div class="timeline-label">Auto-scored</div>
-      </div>
-      <div class="timeline-step reveal">
+      </button>
+      <button class="timeline-step reveal" data-step="review">
         <div class="timeline-icon"><i class="ti ti-users"></i></div>
         <div class="timeline-label">Recruiter review</div>
-      </div>
+      </button>
     </div>
+    <div class="timeline-detail" id="timeline-detail"></div>
   </section>
 
   <section class="landing-roles-section">
     <div class="landing-eyebrow">Built for every role</div>
     <div class="landing-role-grid">
-      <div class="role-card reveal">
+      <button class="role-card reveal active" data-role="candidates">
         <i class="ti ti-message-circle"></i>
         <div class="role-card-title">Candidates</div>
         <div class="role-card-copy">A conversation, not a form — talk through your background at your pace.</div>
-      </div>
-      <div class="role-card reveal">
+      </button>
+      <button class="role-card reveal" data-role="recruiters">
         <i class="ti ti-list-check"></i>
         <div class="role-card-title">Recruiters</div>
         <div class="role-card-copy">Scored transcripts, not raw text — see who's worth a callback fast.</div>
-      </div>
-      <div class="role-card reveal">
+      </button>
+      <button class="role-card reveal" data-role="hr">
         <i class="ti ti-building"></i>
         <div class="role-card-title">HR teams</div>
         <div class="role-card-copy">Org-isolated data, invite-based access, full team visibility.</div>
-      </div>
+      </button>
     </div>
+    <div class="role-preview" id="role-preview"></div>
   </section>
 
   <footer class="landing-footer">
