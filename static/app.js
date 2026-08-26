@@ -278,14 +278,18 @@ function goToLanding() {
   landing.style.display = "grid";
 }
 
-document.getElementById("back-to-landing-home").addEventListener("click", () => {
-  goToLanding();
-});
+const backHomeBtn = document.getElementById("back-to-landing-home");
+if (backHomeBtn) {
+  backHomeBtn.addEventListener("click", () => goToLanding());
+}
 
-document.getElementById("back-to-landing-chat").addEventListener("click", () => {
-  const confirmed = confirm("Leaving now will end this screening. Are you sure?");
-  if (confirmed) goToLanding();
-});
+const backChatBtn = document.getElementById("back-to-landing-chat");
+if (backChatBtn) {
+  backChatBtn.addEventListener("click", () => {
+    const confirmed = confirm("Leaving now will end this screening. Are you sure?");
+    if (confirmed) goToLanding();
+  });
+}
 
 resumeInput.addEventListener("change", async () => {
   const file = resumeInput.files[0];
@@ -339,24 +343,6 @@ inputEl.addEventListener("keydown", (e) => {
 
 sendBtn.addEventListener("click", sendMessage);
 
-document.getElementById("pick-candidate").addEventListener("click", () => {
-  const landing = document.getElementById("landing-view");
-  const home = document.getElementById("home-view");
-
-  landing.classList.add("view-fade-out");
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      landing.classList.add("hidden");
-    });
-  });
-
-  setTimeout(() => {
-    landing.style.display = "none";
-    home.style.display = "grid";
-    home.classList.add("view-fade-in");
-  }, 200);
-});
-
 document.getElementById("start-screening-btn").addEventListener("click", () => {
   const home = document.getElementById("home-view");
   const chat = document.getElementById("chat-view");
@@ -375,14 +361,3 @@ document.getElementById("start-screening-btn").addEventListener("click", () => {
     startSession();
   }, 200);
 });
-
-const revealObserver = new IntersectionObserver((entries) => {
-  entries.forEach((entry) => {
-    if (entry.isIntersecting) {
-      entry.target.classList.add("visible");
-      revealObserver.unobserve(entry.target);
-    }
-  });
-}, { threshold: 0.2 });
-
-document.querySelectorAll(".reveal").forEach((el) => revealObserver.observe(el));
