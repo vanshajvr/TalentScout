@@ -284,37 +284,40 @@ button:disabled {
 }
 .tier-panel {
   background: var(--bubble-bot); border-right: 0.5px solid var(--border);
-  padding: 40px 32px; display: flex; flex-direction: column; justify-content: space-between;
+  padding: 64px 56px; display: flex; flex-direction: column; justify-content: space-between;
 }
-.tier-panel-title { font-size: 24px; font-weight: 700; color: var(--text); line-height: 1.3; margin-bottom: 10px; letter-spacing: -0.01em; }
-.tier-panel-sub { font-size: 13px; color: var(--muted); line-height: 1.55; }
+.tier-panel-title { font-size: 40px; font-weight: 700; color: var(--text); line-height: 1.2; margin-bottom: 16px; letter-spacing: -0.02em; }
+.tier-panel-sub { font-size: 16px; color: var(--muted); line-height: 1.6; max-width: 320px; }
 .tier-back-link {
-  background: none; border: none; padding: 0; font-size: 12.5px; color: var(--muted);
+  background: none; border: none; padding: 0; font-size: 14px; color: var(--muted);
   cursor: pointer; text-align: left; font-family: inherit;
 }
 
-.tier-options { padding: 48px 40px; display: flex; flex-direction: column; gap: 12px; justify-content: center; }
+.tier-options {
+  padding: 64px 72px; display: flex; flex-direction: column; gap: 16px;
+  justify-content: center; max-width: 640px; margin: 0 auto; width: 100%;
+}
 .tier-card {
-  background: var(--panel); border: 0.5px solid var(--border); border-radius: 12px;
-  padding: 18px 20px; display: flex; align-items: center; gap: 16px;
+  background: var(--panel); border: 0.5px solid var(--border); border-radius: 16px;
+  padding: 28px 32px; display: flex; align-items: center; gap: 20px;
   cursor: pointer; text-align: left; font-family: inherit; transition: border-color 0.15s, transform 0.1s;
 }
 .tier-card:hover { border-color: var(--accent-soft); transform: translateY(-1px); }
 .tier-card-featured { border: 2px solid var(--accent); }
 .tier-card-icon {
-  width: 44px; height: 44px; border-radius: 11px; background: var(--bubble-bot);
+  width: 56px; height: 56px; border-radius: 14px; background: var(--bubble-bot);
   display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  font-size: 20px; color: var(--accent);
+  font-size: 26px; color: var(--accent);
 }
 .tier-card-body { flex: 1; }
-.tier-card-heading { display: flex; align-items: center; gap: 8px; }
-.tier-card-heading span:first-child { font-size: 14px; font-weight: 600; color: var(--text); }
-.tier-badge { background: var(--accent); color: #fdf3ee; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
-.tier-card-copy { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
-.tier-card-arrow { font-size: 18px; color: var(--muted); flex-shrink: 0; }
+.tier-card-heading { display: flex; align-items: center; gap: 10px; }
+.tier-card-heading span:first-child { font-size: 19px; font-weight: 600; color: var(--text); }
+.tier-badge { background: var(--accent); color: #fdf3ee; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+.tier-card-copy { font-size: 14.5px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+.tier-card-arrow { font-size: 22px; color: var(--muted); flex-shrink: 0; }
 
 @media (max-width: 780px) {
   .tier-select { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
-  .tier-panel { padding: 24px 20px; }
-  .tier-options { padding: 24px 20px; }
+  .tier-panel { padding: 32px 24px; }
+  .tier-options { padding: 32px 24px; max-width: 100%; }
 }
