@@ -31,6 +31,7 @@ class Candidate(Base):
     resume_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     linkedin_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     github_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"))
 
     sessions: Mapped[list["Session"]] = relationship(back_populates="candidate")
 
@@ -96,6 +97,8 @@ class Recruiter(Base):
     password_hash: Mapped[str] = mapped_column(String(200))
     password_salt: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"))
+    role: Mapped[str] = mapped_column(String(20), default="recruiter")  # "admin" | "recruiter"
 
 class SessionLog(Base):
     __tablename__ = "session_logs"
@@ -107,3 +110,20 @@ class SessionLog(Base):
     event_type: Mapped[str] = mapped_column(String(20))  # "step_transition" | "error" | "info"
     detail: Mapped[str] = mapped_column(Text)
     timestamp: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+class Organization(Base):
+    __tablename__ = "organizations"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(120))
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+class InviteToken(Base):
+    __tablename__ = "invite_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recruiters.id"), nullable=True)
+    used_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recruiters.id"), nullable=True)
+    used_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"))
