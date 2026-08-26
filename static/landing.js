@@ -59,15 +59,15 @@ runDemoLoop();
 const TIMELINE_DETAILS = {
   upload: {
     title: "Drop in a resume, get a profile",
-    body: "PDF or DOCX — even data hidden behind hyperlinks gets extracted. Email, phone, tech stack, and experience are pulled automatically, then shown to the candidate to confirm or edit before anything's saved.",
+    body: "PDF or DOCX: even data hidden behind hyperlinks gets extracted. Email, phone, tech stack, and experience are pulled automatically, then shown to the candidate to confirm or edit before anything's saved.",
   },
   interview: {
     title: "Questions that adapt as you go",
-    body: "Each question is generated live from the candidate's actual tech stack and stated experience level — fundamentals for a junior candidate, trade-offs and failure modes for a senior one. No fixed question bank.",
+    body: "Each question is generated live from the candidate's actual tech stack and stated experience level, fundamentals for a junior candidate, trade-offs and failure modes for a senior one. No fixed question bank.",
   },
   scored: {
     title: "Correctness, reasoning, communication",
-    body: "Every answer is scored on three dimensions with a one-line justification — not just a transcript. Recruiters see a number they can sort by, not pages of raw text to read cold.",
+    body: "Every answer is scored on three dimensions with a one-line justification, not just a transcript. Recruiters see a number they can sort by, not pages of raw text to read cold.",
   },
   review: {
     title: "One dashboard, every candidate",
@@ -98,8 +98,8 @@ renderTimelineDetail("upload");
 const ROLE_PREVIEWS = {
   candidates: `
     <div class="preview-mock">
-      <div class="demo-bubble demo-bubble-bot" style="animation:none;">What draws you to backend engineering?</div>
-      <div class="demo-bubble demo-bubble-user" style="animation:none;">I like systems where correctness matters.</div>
+      <div class="preview-bubble preview-bubble-bot">What draws you to backend engineering?</div>
+      <div class="preview-bubble preview-bubble-user">I like systems where correctness matters.</div>
     </div>
   `,
   recruiters: `

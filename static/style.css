@@ -240,7 +240,7 @@ button:disabled {
   color: var(--muted); margin-bottom: 24px;
 }
 
-.landing-timeline-section { padding: 56px 48px; }
+.landing-timeline-section { padding: 56px 48px 72px; }
 .landing-timeline { display: grid; grid-template-columns: repeat(4, 1fr); position: relative; }
 .landing-timeline::before {
   content: ""; position: absolute; top: 22px; left: 8%; right: 8%; height: 1px; background: var(--border);
@@ -254,8 +254,8 @@ button:disabled {
 }
 .timeline-label { font-size: 13px; font-weight: 500; color: var(--text); }
 
-.landing-roles-section { padding: 0 48px 56px; }
-.landing-role-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.landing-roles-section { padding: 0 48px 72px; }
+.landing-role-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
 .role-card {
   background: var(--panel); border: 0.5px solid var(--border); border-radius: 12px; padding: 22px;
   opacity: 0; transform: translateY(16px); transition: opacity 0.5s ease, transform 0.5s ease;
@@ -310,12 +310,16 @@ button:disabled {
 }
 
 .landing-hero-demo { min-height: 140px; }
-.demo-bubble:last-child::after {
+#demo-preview .demo-bubble:last-child::after {
   content: "▌";
   animation: blink 0.9s step-end infinite;
   opacity: 0.5;
 }
 @keyframes blink { 50% { opacity: 0; } }
+
+.preview-bubble { padding: 10px 14px; border-radius: 14px; font-size: 13px; max-width: 80%; }
+.preview-bubble-bot { align-self: flex-start; background: var(--panel); color: var(--text); border-bottom-left-radius: 4px; }
+.preview-bubble-user { align-self: flex-end; background: var(--accent); color: #fdf3ee; border-bottom-right-radius: 4px; }
 
 .timeline-step {
   background: none; border: none; padding: 0; font-family: inherit; cursor: pointer; text-align: left;
@@ -326,7 +330,7 @@ button:disabled {
 .timeline-step.active .timeline-label { color: var(--accent); }
 
 .timeline-detail {
-  margin-top: 32px; background: var(--panel); border: 0.5px solid var(--border);
+  margin-top: 40px; margin-bottom: 8px; background: var(--panel); border: 0.5px solid var(--border);
   border-radius: 14px; padding: 28px 32px; max-width: 620px;
 }
 .timeline-detail-title { font-size: 17px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
@@ -335,8 +339,8 @@ button:disabled {
 .role-card { cursor: pointer; text-align: left; font-family: inherit; transition: border-color 0.2s, transform 0.15s; }
 .role-card.active { border-color: var(--accent); border-width: 2px; }
 
-.role-preview { margin-top: 24px; }
-.preview-mock { background: var(--bubble-bot); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 10px; max-width: 480px; }
+.role-preview { margin-top: 28px; }
+.preview-mock { background: var(--bubble-bot); border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 10px; max-width: 480px; }
 .preview-table { gap: 8px; }
 .preview-row { display: flex; justify-content: space-between; background: var(--panel); border-radius: 8px; padding: 10px 16px; font-size: 13.5px; color: var(--text); }
 .preview-score { font-weight: 600; color: var(--accent); }
