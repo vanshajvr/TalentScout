@@ -56,45 +56,6 @@ async function runDemoLoop() {
 
 runDemoLoop();
 
-const TIMELINE_DETAILS = {
-  upload: {
-    title: "Drop in a resume, get a profile",
-    body: "PDF or DOCX: even data hidden behind hyperlinks gets extracted. Email, phone, tech stack, and experience are pulled automatically, then shown to the candidate to confirm or edit before anything's saved.",
-  },
-  interview: {
-    title: "Questions that adapt as you go",
-    body: "Each question is generated live from the candidate's actual tech stack and stated experience level, fundamentals for a junior candidate, trade-offs and failure modes for a senior one. No fixed question bank.",
-  },
-  scored: {
-    title: "Correctness, reasoning, communication",
-    body: "Every answer is scored on three dimensions with a one-line justification, not just a transcript. Recruiters see a number they can sort by, not pages of raw text to read cold.",
-  },
-  review: {
-    title: "One dashboard, every candidate",
-    body: "Filter by role, tech stack, or experience. Export to CSV. See the full interview transcript and scores side by side before deciding who gets a callback.",
-  },
-};
-
-function renderTimelineDetail(step) {
-  const detail = TIMELINE_DETAILS[step];
-  const container = document.getElementById("timeline-detail");
-  if (!detail || !container) return;
-  container.innerHTML = `
-    <div class="timeline-detail-title">${detail.title}</div>
-    <div class="timeline-detail-body">${detail.body}</div>
-  `;
-}
-
-document.querySelectorAll(".timeline-step").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".timeline-step").forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    renderTimelineDetail(btn.dataset.step);
-  });
-});
-
-renderTimelineDetail("upload");
-
 const ROLE_PREVIEWS = {
   candidates: `
     <div class="preview-mock">
