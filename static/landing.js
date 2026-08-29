@@ -56,6 +56,39 @@ async function runDemoLoop() {
 
 runDemoLoop();
 
+const railSteps = Array.from(document.querySelectorAll(".rail-step"));
+const railDots = Array.from(document.querySelectorAll(".rail-dot"));
+let hovering = false;
+
+function setActiveStep(index) {
+  railSteps.forEach((el, i) => el.classList.toggle("active", i === index));
+  railDots.forEach((el, i) => el.classList.toggle("active", i === index));
+}
+
+railSteps.forEach((el, i) => {
+  el.addEventListener("mouseenter", () => {
+    hovering = true;
+    setActiveStep(i);
+  });
+  el.addEventListener("mouseleave", () => {
+    hovering = false;
+  });
+});
+
+if (railSteps.length) {
+  const railObserver = new IntersectionObserver((entries) => {
+    if (hovering) return;
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        const index = railSteps.indexOf(entry.target);
+        if (index !== -1) setActiveStep(index);
+      }
+    });
+  }, { threshold: 0.6 });
+
+  railSteps.forEach((el) => railObserver.observe(el));
+}
+
 const ROLE_PREVIEWS = {
   candidates: `
     <div class="preview-mock">
