@@ -240,35 +240,42 @@ button:disabled {
   color: var(--muted); margin-bottom: 24px;
 }
 
-.landing-timeline-section { padding: 72px 48px 96px; max-width: 720px; margin: 0 auto; }
+.landing-timeline-section { padding: 72px 48px 96px; max-width: 960px; }
 
-.step-block {
-  position: relative; padding: 64px 0; border-bottom: 0.5px solid var(--border);
+.rail-layout { display: grid; grid-template-columns: 28px 1fr; gap: 32px; }
+
+.rail-track { display: flex; flex-direction: column; align-items: center; padding-top: 34px; }
+.rail-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--border); flex-shrink: 0; transition: background 0.25s, box-shadow 0.25s; }
+.rail-dot.active { background: var(--accent); box-shadow: 0 0 0 5px rgba(168,70,47,0.15); }
+.rail-line { width: 2px; flex: 1; background: var(--border); margin: 8px 0; }
+
+.rail-steps { display: flex; flex-direction: column; gap: 24px; }
+.rail-step {
+  background: var(--panel); border: 0.5px solid var(--border); border-radius: 16px;
+  padding: 26px 30px; opacity: 0.55; cursor: default;
+  transition: opacity 0.25s ease, border-color 0.25s ease, padding 0.25s ease, border-width 0.1s;
 }
-.step-block:last-child { border-bottom: none; }
-.step-number {
-  position: absolute; top: 64px; right: 0; font-size: 88px; font-weight: 700;
-  color: var(--border); line-height: 1; z-index: 0; user-select: none;
+.rail-step.active { opacity: 1; border: 2px solid var(--accent); padding: 32px 36px; }
+
+.rail-step-header { display: flex; align-items: center; gap: 16px; }
+.rail-step-icon {
+  width: 44px; height: 44px; border-radius: 12px; background: var(--bubble-bot);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  font-size: 20px; color: var(--accent); transition: width 0.25s, height 0.25s, background 0.25s, font-size 0.25s;
 }
-.step-icon {
-  width: 56px; height: 56px; border-radius: 14px; background: var(--bubble-bot);
-  display: flex; align-items: center; justify-content: center; margin-bottom: 24px;
-  font-size: 26px; color: var(--accent); position: relative; z-index: 1;
+.rail-step.active .rail-step-icon { width: 58px; height: 58px; background: var(--accent); font-size: 26px; color: #fdf3ee; }
+.rail-step-title { font-size: 19px; font-weight: 600; color: var(--text); transition: font-size 0.25s; }
+.rail-step.active .rail-step-title { font-size: 24px; font-weight: 700; }
+
+.rail-step-body {
+  font-size: 15.5px; color: var(--muted); line-height: 1.6; margin: 0;
+  max-height: 0; overflow: hidden; opacity: 0; transition: max-height 0.3s ease, opacity 0.25s ease, margin-top 0.25s ease;
 }
-.step-title {
-  font-size: 34px; font-weight: 700; color: var(--text); letter-spacing: -0.015em;
-  line-height: 1.2; margin: 0 0 16px; max-width: 520px; position: relative; z-index: 1;
-}
-.step-body {
-  font-size: 17px; color: var(--muted); line-height: 1.65; max-width: 480px;
-  margin: 0; position: relative; z-index: 1;
-}
+.rail-step.active .rail-step-body { max-height: 140px; opacity: 1; margin-top: 16px; }
 
 @media (max-width: 780px) {
   .landing-timeline-section { padding: 40px 20px 56px; }
-  .step-block { padding: 40px 0; }
-  .step-number { font-size: 56px; }
-  .step-title { font-size: 26px; }
+  .rail-layout { grid-template-columns: 18px 1fr; gap: 16px; }
 }
 
 
