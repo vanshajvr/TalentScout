@@ -119,7 +119,7 @@ function renderRolePreview(role) {
 }
 
 document.querySelectorAll(".role-card").forEach((card) => {
-  card.addEventListener("click", () => {
+  card.addEventListener("mouseenter", () => {
     document.querySelectorAll(".role-card").forEach((c) => c.classList.remove("active"));
     card.classList.add("active");
     renderRolePreview(card.dataset.role);
