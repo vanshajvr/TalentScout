@@ -75,6 +75,7 @@
       <button class="rec-nav-item active" data-tab="overview">Overview</button>
       <button class="rec-nav-item" data-tab="candidates">Candidates</button>
       <button class="rec-nav-item" data-tab="responses">Interview Responses</button>
+      <button class="rec-nav-item" data-tab="logs">Session Logs</button>
       <button id="logout-btn" class="back-link" style="margin-top:auto; margin-bottom:8px;">Log out</button>
     </div>
   </div>
@@ -131,6 +132,15 @@
       <div class="qa-list" id="responses-list"></div>
     </div>
   </div>
+</div>
+
+<div id="tab-logs" class="tab-panel" style="display:none;">
+  <div class="responses-picker">
+    <select id="logs-candidate-select">
+      <option value="">Select a candidate…</option>
+    </select>
+  </div>
+  <div class="log-list" id="logs-list"></div>
 </div>
 
 <script src="/static/recruiter.js"></script>

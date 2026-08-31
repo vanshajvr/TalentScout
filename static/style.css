@@ -357,3 +357,16 @@ button:disabled {
 .preview-score { font-weight: 600; color: var(--accent); }
 .preview-org-row { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--text); }
 .preview-org-row i { color: var(--accent); font-size: 16px; }
+
+.log-list { padding: 20px 28px; }
+.log-item {
+  display: flex; align-items: baseline; gap: 12px; padding: 10px 16px;
+  border-bottom: 0.5px solid var(--border); font-size: 13px;
+}
+.log-item:last-child { border-bottom: none; }
+.log-time { color: var(--muted); font-size: 11.5px; min-width: 80px; flex-shrink: 0; }
+.log-badge { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; padding: 2px 8px; border-radius: 999px; flex-shrink: 0; }
+.log-badge.step_transition { background: #e6f1fb; color: #0c447c; }
+.log-badge.error { background: #fcebeb; color: #a32d2d; }
+.log-badge.info { background: var(--bubble-bot); color: var(--text); }
+.log-detail { color: var(--text); }

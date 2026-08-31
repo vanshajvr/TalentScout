@@ -33,6 +33,9 @@ const inviteSection = document.getElementById("invite-section");
 const generateInviteBtn = document.getElementById("generate-invite-btn");
 const inviteCodeDisplay = document.getElementById("invite-code-display");
 
+const logsSelect = document.getElementById("logs-candidate-select");
+const logsList = document.getElementById("logs-list");
+
 const isAdminSignup = new URLSearchParams(window.location.search).get("admin") === "true";
 if (isAdminSignup && !token) {
   loginMode.style.display = "none";
@@ -135,6 +138,14 @@ async function loadCandidates() {
     opt.textContent = c.name || c.email || c.id;
     responsesSelect.appendChild(opt);
   });
+
+  logsSelect.innerHTML = '<option value="">Select a candidate…</option>';
+  rows.forEach((c) => {
+  const opt = document.createElement("option");
+  opt.value = c.id;
+  opt.textContent = c.name || c.email || c.id;
+  logsSelect.appendChild(opt);
+  });
 }
 
 async function loadCandidateQuestions(candidateId) {
@@ -163,6 +174,38 @@ async function loadCandidateQuestions(candidateId) {
     responsesList.appendChild(div);
   });
 }
+
+async function loadCandidateLogs(candidateId) {
+  if (!candidateId) {
+    logsList.innerHTML = "";
+    return;
+  }
+  logsList.innerHTML = '<div class="empty-note">Loading…</div>';
+  const res = await authedFetch(`${API}/recruiter/candidates/${candidateId}/logs`);
+  const logs = await res.json();
+
+  if (logs.length === 0) {
+    logsList.innerHTML = '<div class="empty-note">No logs recorded for this candidate yet.</div>';
+    return;
+  }
+
+  logsList.innerHTML = "";
+  logs.forEach((l) => {
+    const div = document.createElement("div");
+    div.className = "log-item";
+    const time = new Date(l.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    div.innerHTML = `
+      <span class="log-time">${time}</span>
+      <span class="log-badge ${l.event_type}">${l.event_type.replace("_", " ")}</span>
+      <span class="log-detail">${l.detail}</span>
+    `;
+    logsList.appendChild(div);
+  });
+}
+
+logsSelect.addEventListener("change", () => {
+  loadCandidateLogs(logsSelect.value);
+});
 
 document.querySelectorAll(".rec-nav-item").forEach((item) => {
   item.addEventListener("click", () => {
