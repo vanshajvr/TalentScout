@@ -144,8 +144,7 @@ def get_me(authorization: str = Header(None), db: SQLASession = Depends(get_db))
     recruiter = db.get(Recruiter, uuid.UUID(recruiter_id))
     if recruiter is None:
         raise HTTPException(status_code=401, detail="Account not found")
-    return {"name": recruiter.name, "email": recruiter.email}
-
+    return {"name": recruiter.name, "email": recruiter.email, "role": recruiter.role}
 
 def require_recruiter(authorization: str = Header(None), db: SQLASession = Depends(get_db)) -> Recruiter:
     if not authorization or not authorization.startswith("Bearer "):
