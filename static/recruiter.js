@@ -88,8 +88,8 @@ async function loadCandidates() {
     tr.innerHTML = `
       <td><input type="checkbox" class="row-check" data-id="${c.id}" ${selectedIds.has(c.id) ? "checked" : ""}></td>
       <td>${c.name || "—"}</td>
-      <td>${c.email || "—"}${c.email_verified ? " ✅" : ""}</td>
-      <td>${c.phone || "—"}${c.phone_verified ? " ✅" : ""}</td>
+      <td>${c.email || "—"}</td>
+      <td>${c.phone || "—"}</td>      
       <td>${c.location || "—"}</td>
       <td>${c.experience ?? "—"}</td>
       <td>${c.role || "—"}</td>

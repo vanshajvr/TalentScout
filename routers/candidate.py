@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, SessionLog
+from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, SessionLog, Organization
 from conversation import ConversationState, handle_user_input, get_bot_message
 from llm.groq_llm import GroqLLM
 from utils.constants import BEHAVIORAL_QUESTION_TEMPLATES
@@ -105,8 +105,6 @@ def _sync_candidate_row(db: SQLASession, candidate_id: uuid.UUID, state: Convers
     row.experience = float(c.experience.replace("+", "")) if c.experience else None
     row.role = c.role or None
     row.tech_stack = c.tech_stack or None
-    row.email_verified = c.email_verified
-    row.phone_verified = c.phone_verified
     row.linkedin_url = c.linkedin or None
     row.github_url = c.github or None
     db.commit()
@@ -209,8 +207,12 @@ def _post_process_turn(state, session_uuid, db, session_row, bot_messages):
 
 
 @router.post("/sessions", response_model=StartSessionResponse)
-def start_session(db: SQLASession = Depends(get_db)):
-    candidate_row = Candidate()
+def start_session(org: str = "default", db: SQLASession = Depends(get_db)):
+    org_row = db.query(Organization).filter(Organization.slug == org).first()
+    if org_row is None:
+        raise HTTPException(status_code=404, detail="Unknown organization")
+
+    candidate_row = Candidate(org_id=org_row.id)
     db.add(candidate_row)
     db.flush()
 
@@ -228,7 +230,6 @@ def start_session(db: SQLASession = Depends(get_db)):
     db.commit()
 
     return StartSessionResponse(session_id=session_id, message=greeting)
-
 
 @router.post("/sessions/{session_id}/messages", response_model=MessageResponse)
 def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depends(get_db)):
@@ -252,11 +253,16 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
     state = result.state
 
     if was_ask_email_step and state.candidate.email:
+        candidate_row = get_candidate_or_404(db, session_row.candidate_id)
         duplicate = (
             db.query(Candidate)
-            .filter(Candidate.email == state.candidate.email, Candidate.id != session_row.candidate_id)
+            .filter(
+                Candidate.org_id == candidate_row.org_id,
+                Candidate.email == state.candidate.email,
+                Candidate.id != session_row.candidate_id,
+            )
             .first()
-        )
+        )        
         if duplicate is not None:
             state = state_snapshot
             ACTIVE_SESSIONS[session_id] = state
@@ -402,9 +408,14 @@ def confirm_resume_data(session_id: str, body: ConfirmResumeRequest, db: SQLASes
 
     # catch duplicate email BEFORE it ever reaches the database
     if body.email:
+        candidate_row = get_candidate_or_404(db, session_row.candidate_id)
         duplicate = (
             db.query(Candidate)
-            .filter(Candidate.email == body.email, Candidate.id != session_row.candidate_id)
+            .filter(
+                Candidate.org_id == candidate_row.org_id,
+                Candidate.email == body.email,
+                Candidate.id != session_row.candidate_id,
+            )
             .first()
         )
         if duplicate is not None:

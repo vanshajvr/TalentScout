@@ -4,6 +4,8 @@ import os
 import secrets
 import hashlib
 import uuid
+import re
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Depends, Header
 from fastapi.responses import StreamingResponse
@@ -11,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter, SessionLog
+from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter, SessionLog, Organization, InviteToken
 
 router = APIRouter(prefix="/recruiter")
 
@@ -46,19 +48,72 @@ class AuthResponse(BaseModel):
     token: str
     name: str
 
+class OrgSignupRequest(BaseModel):
+    org_name: str
+    name: str
+    email: str
+    password: str
+
+class InviteTokenResponse(BaseModel):
+    code: str
+
+class DeleteCandidatesRequest(BaseModel):
+    candidate_ids: list[str]
+
 
 @router.post("/signup", response_model=AuthResponse)
 def recruiter_signup(body: SignupRequest, db: SQLASession = Depends(get_db)):
-    expected_code = os.environ.get("RECRUITER_INVITE_CODE")
-    if not expected_code or not secrets.compare_digest(body.invite_code, expected_code):
-        raise HTTPException(status_code=403, detail="Invalid invite code")
+    token_row = (
+        db.query(InviteToken)
+        .filter(InviteToken.code == body.invite_code, InviteToken.used_by.is_(None))
+        .first()
+    )
+    if token_row is None:
+        raise HTTPException(status_code=403, detail="Invalid or already-used invite code")
 
     existing = db.query(Recruiter).filter(Recruiter.email == body.email).first()
     if existing is not None:
         raise HTTPException(status_code=400, detail="An account with this email already exists")
 
     password_hash, salt = _hash_password(body.password)
-    recruiter = Recruiter(name=body.name, email=body.email, password_hash=password_hash, password_salt=salt)
+    recruiter = Recruiter(
+        name=body.name, email=body.email, password_hash=password_hash,
+        password_salt=salt, org_id=token_row.org_id, role="recruiter",
+    )
+    db.add(recruiter)
+    db.commit()
+    db.refresh(recruiter)
+
+    token_row.used_by = recruiter.id
+    token_row.used_at = datetime.now()
+    db.commit()
+
+    token = secrets.token_urlsafe(32)
+    VALID_TOKENS[token] = str(recruiter.id)
+    return AuthResponse(token=token, name=recruiter.name)
+
+@router.post("/signup/org", response_model=AuthResponse)
+def create_org_and_admin(body: OrgSignupRequest, db: SQLASession = Depends(get_db)):
+    slug = re.sub(r"[^a-z0-9-]", "-", body.org_name.lower()).strip("-")
+    if not slug:
+        raise HTTPException(status_code=400, detail="Please enter a valid organization name")
+    if db.query(Organization).filter(Organization.slug == slug).first():
+        raise HTTPException(status_code=400, detail="An organization with this name already exists")
+
+    org = Organization(name=body.org_name, slug=slug)
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+
+    existing = db.query(Recruiter).filter(Recruiter.email == body.email).first()
+    if existing is not None:
+        raise HTTPException(status_code=400, detail="An account with this email already exists")
+
+    password_hash, salt = _hash_password(body.password)
+    recruiter = Recruiter(
+        name=body.name, email=body.email, password_hash=password_hash,
+        password_salt=salt, org_id=org.id, role="admin",
+    )
     db.add(recruiter)
     db.commit()
     db.refresh(recruiter)
@@ -66,7 +121,6 @@ def recruiter_signup(body: SignupRequest, db: SQLASession = Depends(get_db)):
     token = secrets.token_urlsafe(32)
     VALID_TOKENS[token] = str(recruiter.id)
     return AuthResponse(token=token, name=recruiter.name)
-
 
 @router.post("/login", response_model=AuthResponse)
 def recruiter_login(body: LoginRequest, db: SQLASession = Depends(get_db)):
@@ -93,16 +147,37 @@ def get_me(authorization: str = Header(None), db: SQLASession = Depends(get_db))
     return {"name": recruiter.name, "email": recruiter.email}
 
 
-def require_recruiter(authorization: str = Header(None)):
+def require_recruiter(authorization: str = Header(None), db: SQLASession = Depends(get_db)) -> Recruiter:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     token = authorization.removeprefix("Bearer ")
-    if token not in VALID_TOKENS:
+    recruiter_id = VALID_TOKENS.get(token)
+    if not recruiter_id:
         raise HTTPException(status_code=401, detail="Invalid or expired session — please log in again")
+    recruiter = db.get(Recruiter, uuid.UUID(recruiter_id))
+    if recruiter is None:
+        raise HTTPException(status_code=401, detail="Account not found")
+    return recruiter
 
+def require_admin(recruiter: Recruiter = Depends(require_recruiter)) -> Recruiter:
+    if recruiter.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return recruiter
 
-def _candidate_query(db, role, tech, min_experience, status):
+@router.post("/invite", response_model=InviteTokenResponse)
+def create_invite_token(
+    admin: Recruiter = Depends(require_admin),
+    db: SQLASession = Depends(get_db),
+):
+    code = secrets.token_urlsafe(12)
+    token_row = InviteToken(code=code, org_id=admin.org_id, created_by=admin.id)
+    db.add(token_row)
+    db.commit()
+    return InviteTokenResponse(code=code)
+
+def _candidate_query(db, org_id, role, tech, min_experience, status):
     q = db.query(Candidate, SessionModel).join(SessionModel, SessionModel.candidate_id == Candidate.id)
+    q = q.filter(Candidate.org_id == org_id)
     if role:
         q = q.filter(Candidate.role.ilike(f"%{role}%"))
     if min_experience is not None:
@@ -117,19 +192,16 @@ def _candidate_query(db, role, tech, min_experience, status):
 
 @router.get("/candidates")
 def list_candidates(
-    role: str | None = None,
-    tech: str | None = None,
-    min_experience: float | None = None,
-    status: str | None = None,
+    role: str | None = None, tech: str | None = None,
+    min_experience: float | None = None, status: str | None = None,
     db: SQLASession = Depends(get_db),
-    _: None = Depends(require_recruiter),
+    recruiter: Recruiter = Depends(require_recruiter),
 ):
-    rows = _candidate_query(db, role, tech, min_experience, status)
+    rows = _candidate_query(db, recruiter.org_id, role, tech, min_experience, status)
     return [
         {
             "id": str(c.id), "session_id": str(s.id), "name": c.name, "email": c.email,
-            "email_verified": c.email_verified, "phone": c.phone, "phone_verified": c.phone_verified,
-            "location": c.location, "experience": c.experience, "role": c.role,
+            "phone": c.phone, "location": c.location, "experience": c.experience, "role": c.role,
             "tech_stack": c.tech_stack, "resume_filename": c.resume_filename,
             "status": s.status, "current_step": s.current_step,
             "created_at": c.created_at.isoformat() if c.created_at else None,
@@ -139,96 +211,73 @@ def list_candidates(
 
 
 @router.get("/overview")
-def overview(db: SQLASession = Depends(get_db), _: None = Depends(require_recruiter)):
-    total = db.query(Candidate).count()
-    in_progress = db.query(SessionModel).filter(SessionModel.status == "in_progress").count()
-    completed = db.query(SessionModel).filter(SessionModel.status == "completed").count()
-    experiences: list[float] = [
-        c.experience
-        for c in db.query(Candidate).filter(Candidate.experience.isnot(None)).all()
-        if c.experience is not None
-    ]
+def overview(db: SQLASession = Depends(get_db), recruiter: Recruiter = Depends(require_recruiter)):
+    total = db.query(Candidate).filter(Candidate.org_id == recruiter.org_id).count()
+    in_progress = (
+        db.query(SessionModel).join(Candidate)
+        .filter(Candidate.org_id == recruiter.org_id, SessionModel.status == "in_progress").count()
+    )
+    completed = (
+        db.query(SessionModel).join(Candidate)
+        .filter(Candidate.org_id == recruiter.org_id, SessionModel.status == "completed").count()
+    )
+    experiences = [
+    c.experience for c in db.query(Candidate)
+    .filter(Candidate.org_id == recruiter.org_id, Candidate.experience.isnot(None)).all()
+    if c.experience is not None
+    ]   
     avg_experience = round(sum(experiences) / len(experiences), 1) if experiences else None
-    return {
-        "total_candidates": total,
-        "in_progress": in_progress,
-        "completed": completed,
-        "avg_experience": avg_experience,
-    }
+    return {"total_candidates": total, "in_progress": in_progress, "completed": completed, "avg_experience": avg_experience}
 
 
 @router.get("/candidates/{candidate_id}/questions")
 def candidate_questions(
-    candidate_id: str,
-    db: SQLASession = Depends(get_db),
-    _: None = Depends(require_recruiter),
+    candidate_id: str, db: SQLASession = Depends(get_db),
+    recruiter: Recruiter = Depends(require_recruiter),
 ):
     try:
         cid = uuid.UUID(candidate_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid candidate_id")
-
+    candidate_row = db.get(Candidate, cid)
+    if candidate_row is None or candidate_row.org_id != recruiter.org_id:
+        raise HTTPException(status_code=404, detail="Candidate not found")
     session_row = db.query(SessionModel).filter(SessionModel.candidate_id == cid).first()
     if session_row is None:
         return []
-
-    questions = (
-        db.query(GeneratedQuestion)
-        .filter(GeneratedQuestion.session_id == session_row.id)
-        .all()
-    )
+    questions = db.query(GeneratedQuestion).filter(GeneratedQuestion.session_id == session_row.id).all()
     return [
-        {
-            "technology": q.technology,
-            "question_text": q.question_text,
-            "answer_text": q.answer_text,
-            "difficulty_tier": q.difficulty_tier,
-        }
+        {"technology": q.technology, "question_text": q.question_text, "answer_text": q.answer_text, "difficulty_tier": q.difficulty_tier}
         for q in questions
     ]
 
 
 @router.get("/candidates/export")
 def export_candidates(
-    role: str | None = None,
-    tech: str | None = None,
-    min_experience: float | None = None,
-    status: str | None = None,
+    role: str | None = None, tech: str | None = None,
+    min_experience: float | None = None, status: str | None = None,
     db: SQLASession = Depends(get_db),
-    _: None = Depends(require_recruiter),
+    recruiter: Recruiter = Depends(require_recruiter),
 ):
-    rows = _candidate_query(db, role, tech, min_experience, status)
+    rows = _candidate_query(db, recruiter.org_id, role, tech, min_experience, status)
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow([
-        "Name", "Email", "Email Verified", "Phone", "Phone Verified",
-        "Location", "Experience", "Role", "Tech Stack", "Status", "Step", "Resume", "Applied At",
-    ])
+    writer.writerow(["Name", "Email", "Phone", "Location", "Experience", "Role", "Tech Stack", "Status", "Step", "Resume", "Applied At"])
     for c, s in rows:
         writer.writerow([
-            c.name, c.email, c.email_verified, c.phone, c.phone_verified,
-            c.location, c.experience, c.role,
+            c.name, c.email, c.phone, c.location, c.experience, c.role,
             ", ".join(c.tech_stack) if c.tech_stack else "",
             s.status, s.current_step, c.resume_filename or "",
             c.created_at.isoformat() if c.created_at else "",
         ])
     buffer.seek(0)
-    return StreamingResponse(
-        iter([buffer.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=candidates.csv"},
-    )
-
-
-class DeleteCandidatesRequest(BaseModel):
-    candidate_ids: list[str]
+    return StreamingResponse(iter([buffer.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=candidates.csv"})
 
 
 @router.post("/candidates/delete")
 def delete_candidates(
-    body: DeleteCandidatesRequest,
-    db: SQLASession = Depends(get_db),
-    _: None = Depends(require_recruiter),
+    body: DeleteCandidatesRequest, db: SQLASession = Depends(get_db),
+    recruiter: Recruiter = Depends(require_recruiter),
 ):
     deleted = 0
     for cid_str in body.candidate_ids:
@@ -236,40 +285,31 @@ def delete_candidates(
             cid = uuid.UUID(cid_str)
         except ValueError:
             continue
-
-        session_ids = [
-            s.id for s in db.query(SessionModel).filter(SessionModel.candidate_id == cid).all()
-        ]
+        candidate_row = db.get(Candidate, cid)
+        if candidate_row is None or candidate_row.org_id != recruiter.org_id:
+            continue
+        session_ids = [s.id for s in db.query(SessionModel).filter(SessionModel.candidate_id == cid).all()]
         if session_ids:
             db.query(GeneratedQuestion).filter(GeneratedQuestion.session_id.in_(session_ids)).delete(synchronize_session=False)
             db.query(Message).filter(Message.session_id.in_(session_ids)).delete(synchronize_session=False)
             db.query(SessionModel).filter(SessionModel.candidate_id == cid).delete(synchronize_session=False)
-
-        candidate_row = db.get(Candidate, cid)
-        if candidate_row is not None:
-            db.delete(candidate_row)
-            deleted += 1
-
+        db.delete(candidate_row)
+        deleted += 1
     db.commit()
     return {"deleted": deleted}
 
+
 @router.get("/candidates/{candidate_id}/logs")
 def candidate_logs(
-    candidate_id: str,
-    db: SQLASession = Depends(get_db),
-    _: None = Depends(require_recruiter),
+    candidate_id: str, db: SQLASession = Depends(get_db),
+    recruiter: Recruiter = Depends(require_recruiter),
 ):
     cid = uuid.UUID(candidate_id)
+    candidate_row = db.get(Candidate, cid)
+    if candidate_row is None or candidate_row.org_id != recruiter.org_id:
+        raise HTTPException(status_code=404, detail="Candidate not found")
     session_row = db.query(SessionModel).filter(SessionModel.candidate_id == cid).first()
     if session_row is None:
         return []
-    logs = (
-        db.query(SessionLog)
-        .filter(SessionLog.session_id == session_row.id)
-        .order_by(SessionLog.timestamp)
-        .all()
-    )
-    return [
-        {"event_type": l.event_type, "detail": l.detail, "timestamp": l.timestamp.isoformat()}
-        for l in logs
-    ]
+    logs = db.query(SessionLog).filter(SessionLog.session_id == session_row.id).order_by(SessionLog.timestamp).all()
+    return [{"event_type": l.event_type, "detail": l.detail, "timestamp": l.timestamp.isoformat()} for l in logs]

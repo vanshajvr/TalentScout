@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, Text, Float, JSON, Boolean
+from sqlalchemy import ForeignKey, String, Text, Float, JSON, Boolean, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -17,10 +17,8 @@ class Candidate(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     name: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    email: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), index=True, nullable=True)
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
-    phone_verified: Mapped[bool] = mapped_column(Boolean, default=False)        
     location: Mapped[str | None] = mapped_column(String(120), nullable=True)
     education: Mapped[str | None] = mapped_column(String(255), nullable=True)
     experience: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -115,6 +113,7 @@ class Organization(Base):
     __tablename__ = "organizations"
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(120))
+    slug: Mapped[str] = mapped_column(String(60), unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
 class InviteToken(Base):
