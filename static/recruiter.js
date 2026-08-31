@@ -177,6 +177,12 @@ responsesSelect.addEventListener("change", () => {
   loadCandidateQuestions(responsesSelect.value);
 });
 
+document.getElementById("logout-btn").addEventListener("click", () => {
+  localStorage.removeItem("recruiter_token");
+  token = null;
+  window.location.href = "/login";
+});
+
 document.getElementById("show-signup").addEventListener("click", (e) => {
   e.preventDefault();
   loginMode.style.display = "none";
