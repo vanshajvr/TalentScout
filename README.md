@@ -1,9 +1,9 @@
-# TalentScout — AI Hiring Assistant
+# TalentScout: AI Hiring Assistant
 
 A full-stack, multi-tenant AI-powered hiring platform. Organizations sign up,
 invite recruiters, and run first-round candidate screenings end-to-end:
 resume upload and parsing, an adaptive LLM-generated technical + behavioral
-interview, and automatic rubric-based scoring — with a recruiter dashboard
+interview, and automatic rubric-based scoring, with a recruiter dashboard
 and a separate admin dashboard for team and org management.
 
 **Live demo:** https://talentscout-n2bb.onrender.com
@@ -13,7 +13,7 @@ and a separate admin dashboard for team and org management.
 ## Key Features
 
 **Candidate flow**
-- Conversational, chat-based screening — resume upload drives the whole flow,
+- Conversational, chat-based screening, resume upload drives the whole flow,
   no multi-step form
 - Resume upload (PDF/DOCX) with LLM-based extraction of email, phone,
   location, experience, role, tech stack, education, LinkedIn, and GitHub,
@@ -21,15 +21,15 @@ and a separate admin dashboard for team and org management.
 - A single editable confirmation card for all extracted fields, so the
   candidate corrects mistakes in one step instead of retyping everything
 - Adaptive interview questions generated live from the candidate's actual
-  tech stack and stated experience level — no fixed question bank
+  tech stack and stated experience level, no fixed question bank
 - Every answer scored on three dimensions (correctness, reasoning,
   communication) with a one-line justification, not just left as a raw
   transcript for a recruiter to read cold
 
 **Multi-tenant org model**
-- Organizations are isolated — one company's recruiters never see another
+- Organizations are isolated, one company's recruiters never see another
   company's candidates
-- Three-tier access: **admin** (org owner — manages the team, generates
+- Three-tier access: **admin** (org owner: manages the team, generates
   invites, promotes/demotes recruiters) and **recruiter** (reviews
   candidates, transcripts, and scores within their own org)
 - Recruiter signup is gated behind an admin-generated, single-use invite
@@ -93,12 +93,12 @@ and a separate admin dashboard for team and org management.
 **Design highlights**
 - Deterministic state machine drives the conversation; the LLM is only used
   for resume-field extraction, interview-question generation, and answer
-  scoring — never for control flow
+  scoring, never for control flow
 - LLM provider is swappable behind a single interface (`BaseLLM`)
 - Auth (token issuance, expiry, password hashing, role checks) lives in one
   shared `utils/auth.py` module, imported by both the recruiter and admin
   routers rather than duplicated
-- Org isolation is enforced at the query level — every candidate-facing
+- Org isolation is enforced at the query level, every candidate-facing
   endpoint filters by the requesting recruiter's `org_id`, not just hidden
   in the UI
 
@@ -111,7 +111,7 @@ and a separate admin dashboard for team and org management.
   supported as an offline fallback
 - **Resume parsing:** `pdfplumber` (including PDF hyperlink extraction),
   `python-docx`
-- **Frontend:** Vanilla HTML/CSS/JS — no framework, no build step
+- **Frontend:** Vanilla HTML/CSS/JS, no framework, no build step
 - **Auth:** PBKDF2-hashed passwords (per-account salt), bearer tokens with
   a 12-hour expiry
 - **Deployment:** Render (app), Neon (managed Postgres)
@@ -130,8 +130,10 @@ pip install -r requirements.txt
 ```
 
 Create a `.env` file (see `.env.example` for the full list):
+```
 DATABASE_URL=postgresql://user:password@host:5432/dbname
 GROQ_API_KEY=your_groq_api_key
+```
 
 
 Create the schema:
@@ -156,27 +158,27 @@ To run against local Ollama instead of Groq, swap the import in
 
 ## Known Limitations
 
-- Uploaded resumes are stored on local disk — not durable across redeploys
+- Uploaded resumes are stored on local disk, not durable across redeploys
   on platforms with ephemeral filesystems
 - Session/auth tokens are stored in-memory and are lost on server restart
   or redeploy — everyone gets logged out when the app redeploys
-- No real email or phone verification — identity is self-reported and
+- No real email or phone verification, identity is self-reported and
   unverified in this demo (an earlier version had OTP verification; it was
   removed after repeated deliverability issues on free-tier hosting, in
   favor of building out the org/RBAC and scoring features instead)
 - Schema migrations are hand-written one-off scripts (`migrate_org.py`),
-  not a migration framework — acceptable at this project's current size,
+  not a migration framework, acceptable at this project's current size,
   worth revisiting if schema changes become more frequent
 
 ---
 
 ## Data Privacy
 
-This application stores real candidate and recruiter data — names, emails,
-phone numbers, resume contents, and interview transcripts — in Postgres.
+This application stores real candidate and recruiter data: names, emails,
+phone numbers, resume contents, and interview transcripts in Postgres.
 It is not an anonymized or in-memory-only demo.
 
-- Recruiter signup requires an admin-issued, single-use invite code — there
+- Recruiter signup requires an admin-issued, single-use invite code; there
   is no open registration
 - Candidate data is isolated per organization; recruiters can only see
   candidates within their own org
@@ -188,12 +190,12 @@ It is not an anonymized or in-memory-only demo.
 
 ## Human-in-the-Loop & Limitations
 
-This tool assists a human recruiter — it generates questions and scores
+This tool assists a human recruiter, it generates questions and scores
 answers on a rubric, it does not itself reject or auto-disqualify any
 candidate. It has not undergone a bias or adverse-impact audit and is a
 portfolio/learning project, not a production hiring product. Automated
 employment screening is a regulated space in many jurisdictions (e.g. NYC
-Local Law 144, the EU AI Act) — any real-world deployment of a tool like
+Local Law 144, the EU AI Act), any real-world deployment of a tool like
 this would need a proper audit first.
 
 ---
@@ -207,6 +209,6 @@ rebuilt into a full-stack, multi-tenant application demonstrating:
 - Multi-tenant org isolation and role-based access control
 - Clean conversational state management independent of the LLM
 - Provider-agnostic LLM integration
-- A real, deployed product surface — candidate flow, recruiter dashboard,
+- A real, deployed product surface; candidate flow, recruiter dashboard,
   and admin dashboard — not just a chatbot demo
 
