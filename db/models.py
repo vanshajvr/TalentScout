@@ -12,6 +12,7 @@ class Base(DeclarativeBase):
 
 class Candidate(Base):
     __tablename__ = "candidates"
+    __table_args__ = (UniqueConstraint("org_id", "email", name="uq_candidate_org_email"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
