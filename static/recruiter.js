@@ -29,6 +29,13 @@ const signupMode = document.getElementById("signup-mode");
 const logsSelect = document.getElementById("logs-candidate-select");
 const logsList = document.getElementById("logs-list");
 
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  const div = document.createElement("div");
+  div.textContent = String(str);
+  return div.innerHTML;
+}
+
 async function showDashboard() {
   loginView.style.display = "none";
   dashView.style.display = "grid";
@@ -90,15 +97,15 @@ async function loadCandidates() {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><input type="checkbox" class="row-check" data-id="${c.id}" ${selectedIds.has(c.id) ? "checked" : ""}></td>
-      <td>${c.name || "—"}</td>
-      <td>${c.email || "—"}</td>
-      <td>${c.phone || "—"}</td>      
-      <td>${c.location || "—"}</td>
+      <td>${escapeHtml(c.name) || "—"}</td>
+      <td>${escapeHtml(c.email) || "—"}</td>
+      <td>${escapeHtml(c.phone) || "—"}</td>      
+      <td>${escapeHtml(c.location) || "—"}</td>
       <td>${c.experience ?? "—"}</td>
-      <td>${c.role || "—"}</td>
-      <td>${(c.tech_stack || []).join(", ") || "—"}</td>
-      <td>${c.resume_filename || "—"}</td>
-      <td><span class="badge ${c.status}">${c.status}</span></td>
+      <td>${escapeHtml(c.role) || "—"}</td>
+      <td>${escapeHtml((c.tech_stack || []).join(", ")) || "—"}</td>
+      <td>${escapeHtml(c.resume_filename) || "—"}</td>
+      <td><span class="badge ${escapeHtml(c.status)}">${escapeHtml(c.status)}</span></td>
       <td>${c.created_at ? new Date(c.created_at).toLocaleDateString() : "—"}</td>
     `;
     candidatesBody.appendChild(tr);
@@ -147,9 +154,9 @@ async function loadCandidateQuestions(candidateId) {
     const div = document.createElement("div");
     div.className = "qa-item";
     div.innerHTML = `
-      <div class="qa-tech">${q.technology} · ${q.difficulty_tier}</div>
-      <div class="qa-question">${q.question_text}</div>
-      <div class="qa-answer">${q.answer_text || "(no answer recorded yet)"}</div>
+      <div class="qa-tech">${escapeHtml(q.technology)} · ${escapeHtml(q.difficulty_tier)}</div>
+      <div class="qa-question">${escapeHtml(q.question_text)}</div>
+      <div class="qa-answer">${escapeHtml(q.answer_text) || "(no answer recorded yet)"}</div>
     `;
     responsesList.appendChild(div);
   });
@@ -175,9 +182,9 @@ async function loadCandidateLogs(candidateId) {
     div.className = "log-item";
     const time = new Date(l.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
     div.innerHTML = `
-      <span class="log-time">${time}</span>
-      <span class="log-badge ${l.event_type}">${l.event_type.replace("_", " ")}</span>
-      <span class="log-detail">${l.detail}</span>
+      <span class="log-time">${escapeHtml(time)}</span>
+      <span class="log-badge ${escapeHtml(l.event_type)}">${escapeHtml(l.event_type.replace("_", " "))}</span>
+      <span class="log-detail">${escapeHtml(l.detail)}</span>
     `;
     logsList.appendChild(div);
   });

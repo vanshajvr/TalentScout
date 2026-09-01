@@ -21,6 +21,13 @@ const orgSub = document.getElementById("org-sub");
 const generateInviteBtn = document.getElementById("generate-invite-btn");
 const inviteCodeDisplay = document.getElementById("invite-code-display");
 
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  const div = document.createElement("div");
+  div.textContent = String(str);
+  return div.innerHTML;
+}
+
 function formatError(err) {
   if (typeof err.detail === "string") return err.detail;
   if (Array.isArray(err.detail) && err.detail[0]?.msg) return err.detail[0].msg;
@@ -56,9 +63,9 @@ async function loadTeam() {
   rows.forEach((r) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${r.name}</td><td>${r.email}</td><td>${r.role}</td>
+      <td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.email)}</td><td>${escapeHtml(r.role)}</td>
       <td>${r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</td>
-      <td><button class="remove-btn" data-id="${r.id}" style="background:var(--warn); color:white; border:none; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer;">Remove</button></td>
+      <td><button class="remove-btn" data-id="${escapeHtml(r.id)}" style="background:var(--warn); color:white; border:none; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer;">Remove</button></td>
     `;
     teamBody.appendChild(tr);
   });

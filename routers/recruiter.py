@@ -1,11 +1,9 @@
 import csv
 import io
-import os
 import secrets
 import hashlib
 import uuid
-import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Depends, Header
 from fastapi.responses import StreamingResponse
@@ -13,11 +11,24 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter, SessionLog, Organization, InviteToken
+from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter, SessionLog, InviteToken
+
+from utils.validators import is_valid_email
 
 router = APIRouter(prefix="/recruiter")
 
-VALID_TOKENS: dict[str, str] = {}  # token -> recruiter_id
+VALID_TOKENS: dict[str, tuple[str, datetime]] = {}  # token -> (recruiter_id, expires_at)
+TOKEN_TTL = timedelta(hours=12)
+
+def _resolve_token(token: str) -> str:
+    entry = VALID_TOKENS.get(token)
+    if not entry:
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    recruiter_id, expires_at = entry
+    if datetime.utcnow() > expires_at:
+        del VALID_TOKENS[token]
+        raise HTTPException(status_code=401, detail="Session expired — please log in again")
+    return recruiter_id
 
 
 def _hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
@@ -60,10 +71,14 @@ def recruiter_signup(body: SignupRequest, db: SQLASession = Depends(get_db)):
     )
     if token_row is None:
         raise HTTPException(status_code=403, detail="Invalid or already-used invite code")
+    
+    if not is_valid_email(body.email):
+        raise HTTPException(status_code=400, detail="Please enter a valid email address")
 
     existing = db.query(Recruiter).filter(Recruiter.email == body.email).first()
     if existing is not None:
         raise HTTPException(status_code=400, detail="An account with this email already exists")
+    
 
     password_hash, salt = _hash_password(body.password)
     recruiter = Recruiter(
@@ -79,7 +94,7 @@ def recruiter_signup(body: SignupRequest, db: SQLASession = Depends(get_db)):
     db.commit()
 
     token = secrets.token_urlsafe(32)
-    VALID_TOKENS[token] = str(recruiter.id)
+    VALID_TOKENS[token] = (str(recruiter.id), datetime.utcnow() + TOKEN_TTL)
     return AuthResponse(token=token, name=recruiter.name)
 
 @router.post("/login", response_model=AuthResponse)
@@ -89,7 +104,7 @@ def recruiter_login(body: LoginRequest, db: SQLASession = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
     token = secrets.token_urlsafe(32)
-    VALID_TOKENS[token] = str(recruiter.id)
+    VALID_TOKENS[token] = (str(recruiter.id), datetime.utcnow() + TOKEN_TTL)
     return AuthResponse(token=token, name=recruiter.name)
 
 
@@ -98,9 +113,7 @@ def get_me(authorization: str = Header(None), db: SQLASession = Depends(get_db))
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     token = authorization.removeprefix("Bearer ")
-    recruiter_id = VALID_TOKENS.get(token)
-    if not recruiter_id:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    recruiter_id = _resolve_token(token)
     recruiter = db.get(Recruiter, uuid.UUID(recruiter_id))
     if recruiter is None:
         raise HTTPException(status_code=401, detail="Account not found")
@@ -110,9 +123,7 @@ def require_recruiter(authorization: str = Header(None), db: SQLASession = Depen
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     token = authorization.removeprefix("Bearer ")
-    recruiter_id = VALID_TOKENS.get(token)
-    if not recruiter_id:
-        raise HTTPException(status_code=401, detail="Invalid or expired session — please log in again")
+    recruiter_id = _resolve_token(token)
     recruiter = db.get(Recruiter, uuid.UUID(recruiter_id))
     if recruiter is None:
         raise HTTPException(status_code=401, detail="Account not found")

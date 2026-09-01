@@ -5,9 +5,13 @@ from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
 from db.models import Recruiter, InviteToken, Organization
-from routers.recruiter import require_admin, _hash_password
+from routers.recruiter import require_admin, _hash_password, TOKEN_TTL
 import re
 import secrets
+
+from datetime import datetime
+
+from utils.validators import is_valid_email
 
 router = APIRouter(prefix="/admin")
 
@@ -39,6 +43,9 @@ def create_org_and_admin(body: OrgSignupRequest, db: SQLASession = Depends(get_d
     db.commit()
     db.refresh(org)
 
+    if not is_valid_email(body.email):
+        raise HTTPException(status_code=400, detail="Please enter a valid email address")
+
     existing = db.query(Recruiter).filter(Recruiter.email == body.email).first()
     if existing is not None:
         raise HTTPException(status_code=400, detail="An account with this email already exists")
@@ -53,7 +60,7 @@ def create_org_and_admin(body: OrgSignupRequest, db: SQLASession = Depends(get_d
     db.refresh(recruiter)
 
     token = secrets.token_urlsafe(32)
-    VALID_TOKENS[token] = str(recruiter.id)
+    VALID_TOKENS[token] = (str(recruiter.id), datetime.utcnow() + TOKEN_TTL)    
     return AuthResponse(token=token, name=recruiter.name)
 
 
