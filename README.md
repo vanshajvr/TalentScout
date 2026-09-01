@@ -53,6 +53,7 @@ and a separate admin dashboard for team and org management.
 
 ## Architecture
 
+```
 ├── main.py # FastAPI entrypoint, mounts routers/static
 ├── conversation.py # Deterministic state-machine conversation logic
 ├── deps.py # Shared DB dependency helpers
@@ -87,7 +88,7 @@ and a separate admin dashboard for team and org management.
 ├── admin.html / admin.js # Admin dashboard UI
 ├── shared.js # Shared frontend helpers (escaping, error formatting)
 └── style.css
-
+```
 
 **Design highlights**
 - Deterministic state machine drives the conversation; the LLM is only used
@@ -209,4 +210,3 @@ rebuilt into a full-stack, multi-tenant application demonstrating:
 - A real, deployed product surface — candidate flow, recruiter dashboard,
   and admin dashboard — not just a chatbot demo
 
-  
