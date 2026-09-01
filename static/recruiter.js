@@ -26,34 +26,14 @@ const signupError = document.getElementById("signup-error");
 const loginMode = document.getElementById("login-mode");
 const signupMode = document.getElementById("signup-mode");
 
-const orgSignupMode = document.getElementById("org-signup-mode");
-const orgSignupBtn = document.getElementById("org-signup-btn");
-const orgSignupError = document.getElementById("org-signup-error");
-const inviteSection = document.getElementById("invite-section");
-const generateInviteBtn = document.getElementById("generate-invite-btn");
-const inviteCodeDisplay = document.getElementById("invite-code-display");
-
 const logsSelect = document.getElementById("logs-candidate-select");
 const logsList = document.getElementById("logs-list");
-
-const isAdminSignup = new URLSearchParams(window.location.search).get("admin") === "true";
-if (isAdminSignup && !token) {
-  loginMode.style.display = "none";
-  signupMode.style.display = "none";
-  orgSignupMode.style.display = "block";
-}
 
 async function showDashboard() {
   loginView.style.display = "none";
   dashView.style.display = "grid";
   loadOverview();
   loadCandidates();
-
-  const res = await authedFetch(`${API}/recruiter/me`);
-  const me = await res.json();
-  if (me.role === "admin") {
-    inviteSection.style.display = "block";
-  }
 }
 
 function currentFilters() {
@@ -292,36 +272,6 @@ signupBtn.addEventListener("click", async () => {
   showDashboard();
 });
 
-orgSignupBtn.addEventListener("click", async () => {
-  orgSignupError.style.display = "none";
-  const res = await fetch(`${API}/recruiter/signup/org`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      org_name: document.getElementById("org-signup-orgname").value,
-      name: document.getElementById("org-signup-name").value,
-      email: document.getElementById("org-signup-email").value,
-      password: document.getElementById("org-signup-password").value,
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    orgSignupError.textContent = formatError(err);
-    orgSignupError.style.display = "block";
-    return;
-  }
-  const data = await res.json();
-  token = data.token;
-  localStorage.setItem("recruiter_token", token);
-  showDashboard();
-});
-
-document.getElementById("show-login-from-org").addEventListener("click", (e) => {
-  e.preventDefault();
-  orgSignupMode.style.display = "none";
-  loginMode.style.display = "block";
-});
-
 applyBtn.addEventListener("click", loadCandidates);
 
 exportBtn.addEventListener("click", () => {
@@ -343,17 +293,6 @@ selectAll.addEventListener("change", () => {
     if (selectAll.checked) selectedIds.add(cb.dataset.id);
     else selectedIds.delete(cb.dataset.id);
   });
-});
-
-generateInviteBtn.addEventListener("click", async () => {
-  const res = await fetch(`${API}/recruiter/invite`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) return;
-  const data = await res.json();
-  inviteCodeDisplay.textContent = data.code;
-  inviteCodeDisplay.style.display = "block";
 });
 
 deleteBtn.addEventListener("click", async () => {
