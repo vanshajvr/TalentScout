@@ -198,6 +198,7 @@ def _post_process_turn(state, session_uuid, db, session_row, bot_messages):
         db.add(Message(session_id=session_uuid, role="assistant", content=question_text))
         db.commit()
         bot_messages.append(question_text)
+    return state, bot_messages
 
 
 @router.post("/sessions", response_model=StartSessionResponse)
