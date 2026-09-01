@@ -21,6 +21,10 @@ const orgSub = document.getElementById("org-sub");
 const generateInviteBtn = document.getElementById("generate-invite-btn");
 const inviteCodeDisplay = document.getElementById("invite-code-display");
 
+const inviteCodeText = document.getElementById("invite-code-text");
+const copyInviteBtn = document.getElementById("copy-invite-btn");
+const copyInviteIcon = document.getElementById("copy-invite-icon");
+
 function escapeHtml(str) {
   if (str === null || str === undefined) return "";
   const div = document.createElement("div");
@@ -160,9 +164,15 @@ signupBtn.addEventListener("click", async () => {
 generateInviteBtn.addEventListener("click", async () => {
   const res = await authedFetch(`${API}/admin/invite`, { method: "POST" });
   const data = await res.json();
-  inviteCodeDisplay.textContent = data.code;
-  inviteCodeDisplay.style.display = "block";
+  inviteCodeText.textContent = data.code;
+  inviteCodeDisplay.style.display = "flex";
   loadInvites();
+});
+
+copyInviteBtn.addEventListener("click", async () => {
+  await navigator.clipboard.writeText(inviteCodeText.textContent);
+  copyInviteIcon.className = "ti ti-check";
+  setTimeout(() => { copyInviteIcon.className = "ti ti-copy"; }, 1500);
 });
 
 document.getElementById("logout-btn").addEventListener("click", () => {

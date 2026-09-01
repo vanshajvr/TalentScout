@@ -340,8 +340,6 @@ def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession
     resume_text = _extract_resume_text(dest_path, ext)
     extracted = _extract_resume_fields(resume_text)
     state.pending_resume_data = extracted
-
-    extracted = _extract_resume_fields(resume_text)
     if not extracted:
         _log_event(db, session_uuid, "error", "Resume extraction returned empty result")
 
