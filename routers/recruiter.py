@@ -47,16 +47,6 @@ class LoginRequest(BaseModel):
 class AuthResponse(BaseModel):
     token: str
     name: str
-
-class OrgSignupRequest(BaseModel):
-    org_name: str
-    name: str
-    email: str
-    password: str
-
-class InviteTokenResponse(BaseModel):
-    code: str
-
 class DeleteCandidatesRequest(BaseModel):
     candidate_ids: list[str]
 
@@ -87,36 +77,6 @@ def recruiter_signup(body: SignupRequest, db: SQLASession = Depends(get_db)):
     token_row.used_by = recruiter.id
     token_row.used_at = datetime.now()
     db.commit()
-
-    token = secrets.token_urlsafe(32)
-    VALID_TOKENS[token] = str(recruiter.id)
-    return AuthResponse(token=token, name=recruiter.name)
-
-@router.post("/signup/org", response_model=AuthResponse)
-def create_org_and_admin(body: OrgSignupRequest, db: SQLASession = Depends(get_db)):
-    slug = re.sub(r"[^a-z0-9-]", "-", body.org_name.lower()).strip("-")
-    if not slug:
-        raise HTTPException(status_code=400, detail="Please enter a valid organization name")
-    if db.query(Organization).filter(Organization.slug == slug).first():
-        raise HTTPException(status_code=400, detail="An organization with this name already exists")
-
-    org = Organization(name=body.org_name, slug=slug)
-    db.add(org)
-    db.commit()
-    db.refresh(org)
-
-    existing = db.query(Recruiter).filter(Recruiter.email == body.email).first()
-    if existing is not None:
-        raise HTTPException(status_code=400, detail="An account with this email already exists")
-
-    password_hash, salt = _hash_password(body.password)
-    recruiter = Recruiter(
-        name=body.name, email=body.email, password_hash=password_hash,
-        password_salt=salt, org_id=org.id, role="admin",
-    )
-    db.add(recruiter)
-    db.commit()
-    db.refresh(recruiter)
 
     token = secrets.token_urlsafe(32)
     VALID_TOKENS[token] = str(recruiter.id)
@@ -162,17 +122,6 @@ def require_admin(recruiter: Recruiter = Depends(require_recruiter)) -> Recruite
     if recruiter.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return recruiter
-
-@router.post("/invite", response_model=InviteTokenResponse)
-def create_invite_token(
-    admin: Recruiter = Depends(require_admin),
-    db: SQLASession = Depends(get_db),
-):
-    code = secrets.token_urlsafe(12)
-    token_row = InviteToken(code=code, org_id=admin.org_id, created_by=admin.id)
-    db.add(token_row)
-    db.commit()
-    return InviteTokenResponse(code=code)
 
 def _candidate_query(db, org_id, role, tech, min_experience, status):
     q = db.query(Candidate, SessionModel).join(SessionModel, SessionModel.candidate_id == Candidate.id)
