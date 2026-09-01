@@ -25,12 +25,6 @@ const inviteCodeText = document.getElementById("invite-code-text");
 const copyInviteBtn = document.getElementById("copy-invite-btn");
 const copyInviteIcon = document.getElementById("copy-invite-icon");
 
-function formatError(err) {
-  if (typeof err.detail === "string") return err.detail;
-  if (Array.isArray(err.detail) && err.detail[0]?.msg) return err.detail[0].msg;
-  return "Something went wrong.";
-}
-
 async function authedFetch(url, options = {}) {
   const res = await fetch(url, {
     ...options,
