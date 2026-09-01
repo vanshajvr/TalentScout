@@ -69,8 +69,20 @@
 
   <div class="rec-main">
     <div class="main-header">
-      <div class="main-title">Recruiter Dashboard</div>
-      <div class="main-sub" id="candidate-count">Loading…</div>
+      <div class="dash-header">
+        <div>
+          <div class="dash-org-name" id="dash-org-name">Loading…</div>
+          <div class="dash-page-label">Recruiter dashboard</div>
+        </div>
+        <div class="dash-user-block" id="dash-user-block" style="display:none;">
+          <div class="dash-user-info">
+            <div class="dash-user-name" id="dash-user-name"></div>
+            <div class="dash-user-email" id="dash-user-email"></div>
+          </div>
+          <div class="dash-avatar" id="dash-avatar"></div>
+          <span class="dash-role-badge" id="dash-role-badge"></span>
+        </div>
+      </div>
     </div>
 
     <div id="tab-overview" class="tab-panel">
@@ -106,27 +118,26 @@
       </div>
     </div>
 
-<div id="tab-responses" class="tab-panel" style="display:none;">      
-  <div class="responses-picker">
+    <div id="tab-responses" class="tab-panel" style="display:none;">      
+      <div class="responses-picker">
         <select id="responses-candidate-select">
           <option value="">Select a candidate…</option>
         </select>
       </div>
       <div class="qa-list" id="responses-list"></div>
     </div>
+    <div id="tab-logs" class="tab-panel" style="display:none;">
+      <div class="responses-picker">
+        <select id="logs-candidate-select">
+          <option value="">Select a candidate…</option>
+        </select>
+      </div>
+      <div class="log-list" id="logs-list"></div>
+    </div>
   </div>
 </div>
 
-<div id="tab-logs" class="tab-panel" style="display:none;">
-  <div class="responses-picker">
-    <select id="logs-candidate-select">
-      <option value="">Select a candidate…</option>
-    </select>
-  </div>
-  <div class="log-list" id="logs-list"></div>
-</div>
-
-<script src="/static/recruiter.js"></script>
 <script src="/static/shared.js"></script>
+<script src="/static/recruiter.js"></script>
 </body>
 </html>
