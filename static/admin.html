@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TalentScout — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div id="login-view" class="login-box" style="max-width:420px;">
+  <button id="back-link" class="back-link" style="margin-bottom:16px;">← Back to home</button>
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px;">
+    <div class="logo-icon" style="width:44px; height:44px; border-radius:12px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fdf3ee" stroke-width="2" stroke-linecap="round" style="width:21px;height:21px;"><circle cx="10" cy="10" r="6.5"></circle><line x1="15.2" y1="15.2" x2="20" y2="20"></line></svg>
+    </div>
+    <div style="font-size:22px; font-weight:700; color:var(--text);">TalentScout Admin</div>
+  </div>
+
+  <div id="login-mode">
+    <div style="font-size:14px; color:var(--muted); margin-bottom:18px;">Admin login</div>
+    <input type="email" id="login-email" placeholder="Email">
+    <input type="password" id="login-password" placeholder="Password">
+    <button class="landing-btn landing-btn-primary" id="login-btn" style="width:100%; text-align:center;">Log in</button>
+    <div id="login-error" class="error-text" style="display:none;"></div>
+    <div style="font-size:13px; color:var(--muted); margin-top:16px; text-align:center;">
+      New organization? <a href="#" id="show-signup" style="color:var(--accent);">Create one</a>
+    </div>
+  </div>
+
+  <div id="signup-mode" style="display:none;">
+    <div style="font-size:14px; color:var(--muted); margin-bottom:18px;">Create your organization</div>
+    <input type="text" id="signup-orgname" placeholder="Organization name">
+    <input type="text" id="signup-name" placeholder="Your full name">
+    <input type="email" id="signup-email" placeholder="Email">
+    <input type="password" id="signup-password" placeholder="Password">
+    <button class="landing-btn landing-btn-primary" id="signup-btn" style="width:100%; text-align:center;">Create organization</button>
+    <div id="signup-error" class="error-text" style="display:none;"></div>
+    <div style="font-size:13px; color:var(--muted); margin-top:16px; text-align:center;">
+      Already have an account? <a href="#" id="show-login" style="color:var(--accent);">Log in</a>
+    </div>
+  </div>
+</div>
+
+<div id="dash-view" class="rec-shell" style="display:none;">
+  <div class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fdf3ee" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"></circle><line x1="15.2" y1="15.2" x2="20" y2="20"></line></svg>
+      </div>
+      <div class="sidebar-brand-name">TalentScout Admin</div>
+    </div>
+    <div class="rec-nav">
+      <button class="rec-nav-item active" data-tab="team">Team</button>
+      <button class="rec-nav-item" data-tab="invites">Invite Codes</button>
+    </div>
+    <button id="logout-btn" class="back-link" style="margin-top:auto; margin-bottom:8px;">Log out</button>
+  </div>
+
+  <div class="rec-main">
+    <div class="main-header">
+      <div class="main-title">Admin Dashboard</div>
+      <div class="main-sub" id="org-sub">Loading…</div>
+    </div>
+
+    <div id="tab-team" class="tab-panel">
+      <div style="padding:20px 28px;">
+        <button id="generate-invite-btn" class="landing-btn landing-btn-primary" style="margin-bottom:20px;">Generate invite code</button>
+        <div id="invite-code-display" style="display:none; padding:14px 18px; margin-bottom:20px; background:var(--bubble-bot); border-radius:8px; font-family:monospace; font-size:14px;"></div>
+      </div>
+      <div class="table-wrap" style="padding:0 28px;">
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th></th></tr></thead>
+          <tbody id="team-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="tab-invites" class="tab-panel" style="display:none;">
+      <div class="table-wrap" style="padding:20px 28px;">
+        <table>
+          <thead><tr><th>Code</th><th>Created</th><th>Status</th><th>Used by</th></tr></thead>
+          <tbody id="invites-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/admin.js"></script>
+</body>
+</html>
