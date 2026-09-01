@@ -48,17 +48,29 @@ async function authedFetch(url, options = {}) {
 }
 
 async function showDashboard() {
+  const meRes = await authedFetch(`${API}/recruiter/me`);
+  const me = await meRes.json();
+
+  if (me.role !== "admin") {
+    localStorage.removeItem("admin_token");
+    token = null;
+    loginView.style.display = "block";
+    loginError.textContent = "This account doesn't have admin access.";
+    loginError.style.display = "block";
+    return;
+  }
+
   loginView.style.display = "none";
   dashView.style.display = "grid";
 
-  const me = await (await authedFetch(`${API}/recruiter/me`)).json();
   dashUserName.textContent = me.name;
   dashUserEmail.textContent = me.email;
   dashAvatar.textContent = me.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
   dashRoleBadge.textContent = me.role;
   dashUserBlock.style.display = "flex";
 
-  const org = await (await authedFetch(`${API}/admin/overview`)).json();
+  const orgRes = await authedFetch(`${API}/admin/overview`);
+  const org = await orgRes.json();
   dashOrgName.textContent = org.org_name;
 
   const screeningLink = `${window.location.origin}/screen/${org.org_slug}`;
@@ -76,7 +88,12 @@ document.getElementById("copy-link-btn").addEventListener("click", async () => {
 });
 
 async function loadTeam() {
-  const rows = await (await authedFetch(`${API}/admin/team`)).json();
+  const res = await authedFetch(`${API}/admin/team`);
+  if (!res.ok) {
+    teamBody.innerHTML = '<tr><td colspan="5" class="empty-note">Could not load team.</td></tr>';
+    return;
+  }
+  const rows = await res.json();
   teamBody.innerHTML = "";
   rows.forEach((r) => {
     const tr = document.createElement("tr");
