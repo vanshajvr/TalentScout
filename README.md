@@ -131,7 +131,7 @@ pip install -r requirements.txt
 
 Create a `.env` file (see `.env.example` for the full list):
 ```
-DATABASE_URL=postgresql://user:password@host:5432/dbname
+DATABASE_URL=postgresql://neondb_owner:npg_HDLVTo3w5gry@ep-sparkling-sky-azy1tvdr-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
 GROQ_API_KEY=your_groq_api_key
 ```
 
