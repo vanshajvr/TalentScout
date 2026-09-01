@@ -276,7 +276,6 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
     for msg in result.bot_messages:
         db.add(Message(session_id=session_uuid, role="assistant", content=msg))
 
-    session_row.current_step = state.step
     if session_row.current_step != state.step:
         _log_event(db, session_uuid, "step_transition", f"{session_row.current_step} -> {state.step}")
     session_row.current_step = state.step
@@ -370,7 +369,6 @@ def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession
 
     db.add(Message(session_id=session_uuid, role="user", content=f"[uploaded resume: {file.filename}]"))
     db.add(Message(session_id=session_uuid, role="assistant", content=bot_reply))
-    session_row.current_step = state.step
     if session_row.current_step != state.step:
         _log_event(db, session_uuid, "step_transition", f"{session_row.current_step} -> {state.step}")
     session_row.current_step = state.step
@@ -445,11 +443,11 @@ def confirm_resume_data(session_id: str, body: ConfirmResumeRequest, db: SQLASes
     for msg in result.bot_messages:
         db.add(Message(session_id=session_uuid, role="assistant", content=msg))
 
-    session_row.current_step = state.step
     if session_row.current_step != state.step:
         _log_event(db, session_uuid, "step_transition", f"{session_row.current_step} -> {state.step}")
     session_row.current_step = state.step
     db.commit()
+    
     _sync_candidate_row(db, session_row.candidate_id, state)
 
     bot_messages = list(result.bot_messages)
