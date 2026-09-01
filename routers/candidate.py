@@ -184,7 +184,7 @@ def _score_answer(question_text: str, answer_text: str, technology: str, experie
         
     
 def _post_process_turn(state, session_uuid, db, session_row, bot_messages):
-    if state.step == "interviewing" and not state.current_question and not state.current_question:
+    if state.step == "interviewing" and not state.current_question:
         question_text = _generate_next_question(state)
         state.current_question = question_text
         plan_item = state.interview_plan[state.interview_index]
@@ -198,12 +198,6 @@ def _post_process_turn(state, session_uuid, db, session_row, bot_messages):
         db.add(Message(session_id=session_uuid, role="assistant", content=question_text))
         db.commit()
         bot_messages.append(question_text)
-
-    if state.step == "end" and session_row.status != "completed":
-        session_row.status = "completed"
-        db.commit()
-
-    return state, bot_messages
 
 
 @router.post("/sessions", response_model=StartSessionResponse)
