@@ -29,9 +29,27 @@ const signupMode = document.getElementById("signup-mode");
 const logsSelect = document.getElementById("logs-candidate-select");
 const logsList = document.getElementById("logs-list");
 
+const dashOrgName = document.getElementById("dash-org-name");
+const dashUserBlock = document.getElementById("dash-user-block");
+const dashUserName = document.getElementById("dash-user-name");
+const dashUserEmail = document.getElementById("dash-user-email");
+const dashAvatar = document.getElementById("dash-avatar");
+const dashRoleBadge = document.getElementById("dash-role-badge");
+
 async function showDashboard() {
   loginView.style.display = "none";
   dashView.style.display = "grid";
+
+  const me = await (await authedFetch(`${API}/recruiter/me`)).json();
+  dashUserName.textContent = me.name;
+  dashUserEmail.textContent = me.email;
+  dashAvatar.textContent = me.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+  dashRoleBadge.textContent = me.role;
+  dashUserBlock.style.display = "flex";
+
+  const org = await (await authedFetch(`${API}/recruiter/org`)).json();
+  dashOrgName.textContent = org.org_name;
+
   loadOverview();
   loadCandidates();
 }

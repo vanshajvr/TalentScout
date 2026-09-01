@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Recruiter, InviteToken, Organization
+from db.models import Recruiter, InviteToken, Organization, Candidate
 from utils.auth import require_admin, hash_password, issue_token
 import re
 import secrets
@@ -131,3 +131,53 @@ def list_invites(db: SQLASession = Depends(get_db), admin: Recruiter = Depends(r
         }
         for t in tokens
     ]
+
+class UpdateRoleRequest(BaseModel):
+    recruiter_id: str
+    new_role: str
+
+
+@router.post("/team/role")
+def update_recruiter_role(
+    body: UpdateRoleRequest,
+    db: SQLASession = Depends(get_db),
+    admin: Recruiter = Depends(require_admin),
+):
+    if body.new_role not in ("admin", "recruiter"):
+        raise HTTPException(status_code=400, detail="Invalid role")
+
+    try:
+        target_id = uuid.UUID(body.recruiter_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid recruiter_id")
+
+    target = db.get(Recruiter, target_id)
+    if target is None or target.org_id != admin.org_id:
+        raise HTTPException(status_code=404, detail="Recruiter not found")
+
+    if target.id == admin.id and body.new_role == "recruiter":
+        remaining_admins = db.query(Recruiter).filter(
+            Recruiter.org_id == admin.org_id, Recruiter.role == "admin", Recruiter.id != target.id
+        ).count()
+        if remaining_admins == 0:
+            raise HTTPException(status_code=400, detail="Can't demote the last admin in this org")
+
+    target.role = body.new_role
+    db.commit()
+    return {"id": str(target.id), "role": target.role}
+
+@router.get("/overview")
+def admin_overview(db: SQLASession = Depends(get_db), admin: Recruiter = Depends(require_admin)):
+    org = db.get(Organization, admin.org_id)
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    team_count = db.query(Recruiter).filter(Recruiter.org_id == admin.org_id).count()
+    candidate_count = db.query(Candidate).filter(Candidate.org_id == admin.org_id).count()
+    pending_invites = db.query(InviteToken).filter(
+        InviteToken.org_id == admin.org_id, InviteToken.used_by.is_(None)
+    ).count()
+    return {
+        "org_name": org.name, "org_slug": org.slug,
+        "team_count": team_count, "candidate_count": candidate_count,
+        "pending_invites": pending_invites,
+    }

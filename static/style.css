@@ -370,3 +370,23 @@ button:disabled {
 .log-badge.error { background: #fcebeb; color: #a32d2d; }
 .log-badge.info { background: var(--bubble-bot); color: var(--text); }
 .log-detail { color: var(--text); }
+
+.dash-header { display: flex; align-items: center; justify-content: space-between; }
+.dash-org-name { font-size: 18px; font-weight: 700; color: var(--text); }
+.dash-page-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.dash-user-block { display: flex; align-items: center; gap: 10px; }
+.dash-user-info { text-align: right; }
+.dash-user-name { font-size: 13px; font-weight: 500; color: var(--text); }
+.dash-user-email { font-size: 11px; color: var(--muted); }
+.dash-avatar {
+  width: 34px; height: 34px; border-radius: 50%; background: var(--bubble-bot);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; color: var(--accent);
+}
+.dash-role-badge { background: var(--accent); color: #fdf3ee; font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 999px; text-transform: capitalize; }
+
+.org-link-box {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bubble-bot); border-radius: var(--radius, 10px); padding: 12px 16px;
+  font-family: monospace; font-size: 13px; margin-bottom: 20px;
+}

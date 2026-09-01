@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter, SessionLog, InviteToken
+from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter, SessionLog, InviteToken, Organization
 
 from utils.validators import is_valid_email
 from utils.auth import hash_password, verify_password, issue_token, require_recruiter, _resolve_token
@@ -33,6 +33,12 @@ class LoginRequest(BaseModel):
 class DeleteCandidatesRequest(BaseModel):
     candidate_ids: list[str]
 
+@router.get("/org")
+def get_my_org(db: SQLASession = Depends(get_db), recruiter: Recruiter = Depends(require_recruiter)):
+    org = db.get(Organization, recruiter.org_id)
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    return {"org_name": org.name, "org_slug": org.slug}
 
 @router.post("/signup", response_model=AuthResponse)
 def recruiter_signup(body: SignupRequest, db: SQLASession = Depends(get_db)):

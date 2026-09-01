@@ -25,6 +25,13 @@ const inviteCodeText = document.getElementById("invite-code-text");
 const copyInviteBtn = document.getElementById("copy-invite-btn");
 const copyInviteIcon = document.getElementById("copy-invite-icon");
 
+const dashOrgName = document.getElementById("dash-org-name");
+const dashUserBlock = document.getElementById("dash-user-block");
+const dashUserName = document.getElementById("dash-user-name");
+const dashUserEmail = document.getElementById("dash-user-email");
+const dashAvatar = document.getElementById("dash-avatar");
+const dashRoleBadge = document.getElementById("dash-role-badge");
+
 async function authedFetch(url, options = {}) {
   const res = await fetch(url, {
     ...options,
@@ -43,22 +50,57 @@ async function authedFetch(url, options = {}) {
 async function showDashboard() {
   loginView.style.display = "none";
   dashView.style.display = "grid";
+
   const me = await (await authedFetch(`${API}/recruiter/me`)).json();
-  orgSub.textContent = me.name;
+  dashUserName.textContent = me.name;
+  dashUserEmail.textContent = me.email;
+  dashAvatar.textContent = me.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+  dashRoleBadge.textContent = me.role;
+  dashUserBlock.style.display = "flex";
+
+  const org = await (await authedFetch(`${API}/admin/overview`)).json();
+  dashOrgName.textContent = org.org_name;
+
+  const screeningLink = `${window.location.origin}/screen/${org.org_slug}`;
+  document.getElementById("screening-link-text").textContent = screeningLink;
+
   loadTeam();
 }
+
+document.getElementById("copy-link-btn").addEventListener("click", async () => {
+  const text = document.getElementById("screening-link-text").textContent;
+  await navigator.clipboard.writeText(text);
+  const icon = document.getElementById("copy-link-icon");
+  icon.className = "ti ti-check";
+  setTimeout(() => { icon.className = "ti ti-copy"; }, 1500);
+});
 
 async function loadTeam() {
   const rows = await (await authedFetch(`${API}/admin/team`)).json();
   teamBody.innerHTML = "";
   rows.forEach((r) => {
     const tr = document.createElement("tr");
+    const otherRole = r.role === "admin" ? "recruiter" : "admin";
     tr.innerHTML = `
-      <td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.email)}</td><td>${escapeHtml(r.role)}</td>
+      <td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.email)}</td>
+      <td><span class="badge ${r.role === "admin" ? "completed" : "in_progress"}">${escapeHtml(r.role)}</span></td>
       <td>${r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</td>
-      <td><button class="remove-btn" data-id="${escapeHtml(r.id)}" style="background:var(--warn); color:white; border:none; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer;">Remove</button></td>
+      <td style="display:flex; gap:6px;">
+        <button class="role-btn" data-id="${r.id}" data-role="${otherRole}" style="font-size:12px; padding:5px 10px;">Make ${otherRole}</button>
+        <button class="remove-btn" data-id="${r.id}" style="background:var(--warn); color:white; border:none; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer;">Remove</button>
+      </td>
     `;
     teamBody.appendChild(tr);
+  });
+  document.querySelectorAll(".role-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const res = await authedFetch(`${API}/admin/team/role`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recruiter_id: btn.dataset.id, new_role: btn.dataset.role }),
+      });
+      if (res.ok) loadTeam();
+    });
   });
   document.querySelectorAll(".remove-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
