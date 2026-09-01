@@ -1,9 +1,8 @@
 import csv
 import io
 import secrets
-import hashlib
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Depends, Header
 from fastapi.responses import StreamingResponse
@@ -14,34 +13,11 @@ from db.database import get_db
 from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter, SessionLog, InviteToken
 
 from utils.validators import is_valid_email
+from utils.auth import hash_password, verify_password, issue_token, require_recruiter, _resolve_token
+
+from utils.schemas import AuthResponse
 
 router = APIRouter(prefix="/recruiter")
-
-VALID_TOKENS: dict[str, tuple[str, datetime]] = {}  # token -> (recruiter_id, expires_at)
-TOKEN_TTL = timedelta(hours=12)
-
-def _resolve_token(token: str) -> str:
-    entry = VALID_TOKENS.get(token)
-    if not entry:
-        raise HTTPException(status_code=401, detail="Invalid or expired session")
-    recruiter_id, expires_at = entry
-    if datetime.utcnow() > expires_at:
-        del VALID_TOKENS[token]
-        raise HTTPException(status_code=401, detail="Session expired — please log in again")
-    return recruiter_id
-
-
-def _hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
-    if salt is None:
-        salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100_000)
-    return digest.hex(), salt
-
-
-def _verify_password(password: str, salt: str, expected_hash: str) -> bool:
-    digest, _ = _hash_password(password, salt)
-    return secrets.compare_digest(digest, expected_hash)
-
 
 class SignupRequest(BaseModel):
     name: str
@@ -54,10 +30,6 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
-
-class AuthResponse(BaseModel):
-    token: str
-    name: str
 class DeleteCandidatesRequest(BaseModel):
     candidate_ids: list[str]
 
@@ -80,7 +52,7 @@ def recruiter_signup(body: SignupRequest, db: SQLASession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="An account with this email already exists")
     
 
-    password_hash, salt = _hash_password(body.password)
+    password_hash, salt = hash_password(body.password)
     recruiter = Recruiter(
         name=body.name, email=body.email, password_hash=password_hash,
         password_salt=salt, org_id=token_row.org_id, role="recruiter",
@@ -94,17 +66,17 @@ def recruiter_signup(body: SignupRequest, db: SQLASession = Depends(get_db)):
     db.commit()
 
     token = secrets.token_urlsafe(32)
-    VALID_TOKENS[token] = (str(recruiter.id), datetime.utcnow() + TOKEN_TTL)
+    token = issue_token(str(recruiter.id))
     return AuthResponse(token=token, name=recruiter.name)
 
 @router.post("/login", response_model=AuthResponse)
 def recruiter_login(body: LoginRequest, db: SQLASession = Depends(get_db)):
     recruiter = db.query(Recruiter).filter(Recruiter.email == body.email).first()
-    if recruiter is None or not _verify_password(body.password, recruiter.password_salt, recruiter.password_hash):
+    if recruiter is None or not verify_password(body.password, recruiter.password_salt, recruiter.password_hash):
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
     token = secrets.token_urlsafe(32)
-    VALID_TOKENS[token] = (str(recruiter.id), datetime.utcnow() + TOKEN_TTL)
+    token = issue_token(str(recruiter.id))
     return AuthResponse(token=token, name=recruiter.name)
 
 
@@ -118,21 +90,6 @@ def get_me(authorization: str = Header(None), db: SQLASession = Depends(get_db))
     if recruiter is None:
         raise HTTPException(status_code=401, detail="Account not found")
     return {"name": recruiter.name, "email": recruiter.email, "role": recruiter.role}
-
-def require_recruiter(authorization: str = Header(None), db: SQLASession = Depends(get_db)) -> Recruiter:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    token = authorization.removeprefix("Bearer ")
-    recruiter_id = _resolve_token(token)
-    recruiter = db.get(Recruiter, uuid.UUID(recruiter_id))
-    if recruiter is None:
-        raise HTTPException(status_code=401, detail="Account not found")
-    return recruiter
-
-def require_admin(recruiter: Recruiter = Depends(require_recruiter)) -> Recruiter:
-    if recruiter.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return recruiter
 
 def _candidate_query(db, org_id, role, tech, min_experience, status):
     q = db.query(Candidate, SessionModel).join(SessionModel, SessionModel.candidate_id == Candidate.id)

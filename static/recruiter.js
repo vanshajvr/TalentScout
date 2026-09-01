@@ -29,13 +29,6 @@ const signupMode = document.getElementById("signup-mode");
 const logsSelect = document.getElementById("logs-candidate-select");
 const logsList = document.getElementById("logs-list");
 
-function escapeHtml(str) {
-  if (str === null || str === undefined) return "";
-  const div = document.createElement("div");
-  div.textContent = String(str);
-  return div.innerHTML;
-}
-
 async function showDashboard() {
   loginView.style.display = "none";
   dashView.style.display = "grid";
@@ -54,12 +47,6 @@ function currentFilters() {
   if (experience) params.set("min_experience", experience);
   if (status) params.set("status", status);
   return params;
-}
-
-function formatError(err) {
-  if (typeof err.detail === "string") return err.detail;
-  if (Array.isArray(err.detail) && err.detail[0]?.msg) return err.detail[0].msg;
-  return "Could not create account.";
 }
 
 async function authedFetch(url) {
@@ -322,14 +309,6 @@ deleteBtn.addEventListener("click", async () => {
 });
 
 if (token) showDashboard();
-
-function goBackOrHome() {
-  if (document.referrer && document.referrer.includes(window.location.host)) {
-    history.back();
-  } else {
-    window.location.href = "/";
-  }
-}
 
 document.getElementById("back-link-login")?.addEventListener("click", goBackOrHome);
 document.getElementById("back-link-dash")?.addEventListener("click", goBackOrHome);

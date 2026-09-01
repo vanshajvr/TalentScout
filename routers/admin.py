@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
 from db.models import Recruiter, InviteToken, Organization
-from routers.recruiter import require_admin, _hash_password, TOKEN_TTL
+from utils.auth import require_admin, hash_password, issue_token
 import re
 import secrets
 
@@ -13,9 +13,9 @@ from datetime import datetime
 
 from utils.validators import is_valid_email
 
+from utils.schemas import AuthResponse
+
 router = APIRouter(prefix="/admin")
-
-
 class OrgSignupRequest(BaseModel):
     org_name: str
     name: str
@@ -23,14 +23,8 @@ class OrgSignupRequest(BaseModel):
     password: str
 
 
-class AuthResponse(BaseModel):
-    token: str
-    name: str
-
-
 @router.post("/signup", response_model=AuthResponse)
 def create_org_and_admin(body: OrgSignupRequest, db: SQLASession = Depends(get_db)):
-    from routers.recruiter import VALID_TOKENS  # avoid circular import at module load time
 
     slug = re.sub(r"[^a-z0-9-]", "-", body.org_name.lower()).strip("-")
     if not slug:
@@ -50,7 +44,7 @@ def create_org_and_admin(body: OrgSignupRequest, db: SQLASession = Depends(get_d
     if existing is not None:
         raise HTTPException(status_code=400, detail="An account with this email already exists")
 
-    password_hash, salt = _hash_password(body.password)
+    password_hash, salt = hash_password(body.password)
     recruiter = Recruiter(
         name=body.name, email=body.email, password_hash=password_hash,
         password_salt=salt, org_id=org.id, role="admin",
@@ -60,7 +54,7 @@ def create_org_and_admin(body: OrgSignupRequest, db: SQLASession = Depends(get_d
     db.refresh(recruiter)
 
     token = secrets.token_urlsafe(32)
-    VALID_TOKENS[token] = (str(recruiter.id), datetime.utcnow() + TOKEN_TTL)    
+    token = issue_token(str(recruiter.id))    
     return AuthResponse(token=token, name=recruiter.name)
 
 

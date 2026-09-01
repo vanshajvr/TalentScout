@@ -25,13 +25,6 @@ const inviteCodeText = document.getElementById("invite-code-text");
 const copyInviteBtn = document.getElementById("copy-invite-btn");
 const copyInviteIcon = document.getElementById("copy-invite-icon");
 
-function escapeHtml(str) {
-  if (str === null || str === undefined) return "";
-  const div = document.createElement("div");
-  div.textContent = String(str);
-  return div.innerHTML;
-}
-
 function formatError(err) {
   if (typeof err.detail === "string") return err.detail;
   if (Array.isArray(err.detail) && err.detail[0]?.msg) return err.detail[0].msg;
@@ -181,8 +174,5 @@ document.getElementById("logout-btn").addEventListener("click", () => {
   window.location.href = "/login";
 });
 
-document.getElementById("back-link").addEventListener("click", () => {
-  window.location.href = "/";
-});
-
+document.getElementById("back-link").addEventListener("click", goBackOrHome);
 if (token) showDashboard();
