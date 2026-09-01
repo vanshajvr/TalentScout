@@ -19,8 +19,6 @@ class CandidateState:
     role: str = ""
     tech_stack: list[str] = field(default_factory=list)
     education: str = ""
-    email_verified: bool = False
-    phone_verified: bool = False
     linkedin: str = ""
     github: str = ""
 
@@ -30,8 +28,6 @@ class ConversationState:
     step: str = "greeting"
     candidate: CandidateState = field(default_factory=CandidateState)
     retry: bool = False
-    pending_otp: str = ""
-    otp_attempts: int = 0
     pending_resume_data: dict = field(default_factory=dict)
     interview_plan: list[str] = field(default_factory=list)
     interview_index: int = 0
@@ -64,37 +60,6 @@ def get_bot_message(state: ConversationState) -> str:
         return "Please upload your resume/CV (PDF or DOCX) to continue."
     if step == "confirm_resume_data":
         return ""  # main.py already sent this via the /resume endpoint
-    if step == "ask_email":
-        return "Thanks. What's your email address?"
-    if step == "verify_email":
-        return ""  # main.py fills in the mock OTP message
-    if step == "ask_phone":
-        return "Your phone number, please."
-    if step == "verify_phone":
-        return ""  # main.py fills in the mock OTP message
-    if step == "ask_location":
-        return "Where are you currently located?"
-    if step == "ask_experience":
-        return "How many years of professional experience do you have?"
-    if step == "ask_role":
-        return "Which position(s) are you applying for?"
-    if step == "ask_tech_stack":
-        return (
-            "Please list your tech stack — programming languages, "
-            "frameworks, databases, and tools you are comfortable with."
-        )
-    if step == "confirm_tech_stack":
-        stack = ", ".join(state.candidate.tech_stack)
-        return (
-            f"You listed the following tech stack:\n\n"
-            f"**{stack}**\n\n"
-            "Is this correct? (yes / no)\n"
-            "You can also add missing technologies."
-        )  
-    if step == "confirm_education":
-        edu = state.pending_resume_data.get("education", "")
-        return f"One more thing — your resume shows: **{edu}**. Is that correct? (yes / no)"
-    
     if step == "interviewing":
         return ""
     if step == "end":
@@ -127,7 +92,7 @@ def handle_user_input(state: ConversationState, user_input: str) -> StepResult:
         bot_messages.append(get_bot_message(state))
         return StepResult(state=state, bot_messages=bot_messages)
 
-    if seems_uncertain(user_input) and state.step not in ("interviewing", "verify_email", "verify_phone"):
+    if seems_uncertain(user_input) and state.step not in "interviewing":
         bot_messages.append(
             "No worries — take your time. This is just an initial screening."
         )
@@ -166,68 +131,11 @@ def handle_user_input(state: ConversationState, user_input: str) -> StepResult:
             return StepResult(state=state, bot_messages=bot_messages)
         bot_messages.append(get_bot_message(state))
         return StepResult(state=state, bot_messages=bot_messages)
-
-    elif step == "ask_email":
-        if not is_valid_email(user_input):
-            state.retry = True
-            bot_messages.append("That doesn't look like a valid email address. Please try again.")
-            return StepResult(state=state, bot_messages=bot_messages)
-        state.retry = False
-        candidate.email = user_input
-        state.pending_otp = ""
-        state.otp_attempts = 0
-
-    elif step == "ask_phone":
-        if not is_valid_phone(user_input):
-            bot_messages.append(
-                "Please enter a valid phone number. "
-                "You may include a country code (e.g., +91XXXXXXXXXX)."
-            )
-            return StepResult(state=state, bot_messages=bot_messages)
-        candidate.phone = user_input
-        state.pending_otp = ""
-        state.otp_attempts = 0
-
-
-    elif step == "ask_location":
-        candidate.location = user_input
-
-    elif step == "ask_experience":
-        if not is_valid_experience(user_input):
-            bot_messages.append("Please enter experience in years (e.g., 0, 1.5, 2+).")
-            return StepResult(state=state, bot_messages=bot_messages)
-        candidate.experience = user_input
-
-    elif step == "ask_role":
-        candidate.role = user_input
-
-    elif step == "ask_tech_stack":
-        candidate.tech_stack = [t.strip() for t in user_input.split(",") if t.strip()]
-
-    elif step == "confirm_tech_stack":
-        if user_input_clean in {"yes", "y"}:
-            state.interview_plan = _build_interview_plan(candidate.tech_stack)
-            state.interview_index = 0
-            state.current_question = ""
-            state.qa_history = []
-            state.step = "interviewing"
-            return StepResult(state=state, bot_messages=bot_messages)
-        else:
-            additions = [t.strip() for t in user_input.split(",") if t.strip()]
-            candidate.tech_stack.extend(additions)
-            bot_messages.append(get_bot_message(state))
-            return StepResult(state=state, bot_messages=bot_messages)
     
     elif step == "upload_resume":
         bot_messages.append(
         "A resume is required to continue — please use the upload button above."
     )
-        return StepResult(state=state, bot_messages=bot_messages)
-    
-    elif step == "confirm_education":
-        if user_input_clean in {"yes", "y"}:
-            candidate.education = state.pending_resume_data.get("education", "")
-        state.step = "interviewing"
         return StepResult(state=state, bot_messages=bot_messages)
 
     elif step == "interviewing":

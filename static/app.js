@@ -5,9 +5,7 @@ let pastedThisTurn = false;
 
 const STEPS_ORDER = [
   "greeting", "ask_name", "upload_resume", "confirm_resume_data",
-  "ask_email", "verify_email", "ask_phone", "verify_phone",
-  "ask_location", "ask_experience", "ask_role", "ask_tech_stack",
-  "confirm_tech_stack", "interviewing", "end"
+  "interviewing", "end"
 ];
 
 const chatEl = document.getElementById("chat");
