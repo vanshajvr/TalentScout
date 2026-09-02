@@ -83,8 +83,13 @@ document.getElementById("copy-link-btn").addEventListener("click", async () => {
   const text = document.getElementById("screening-link-text").textContent;
   await navigator.clipboard.writeText(text);
   const icon = document.getElementById("copy-link-icon");
+  const label = document.getElementById("copy-link-label");
   icon.className = "ti ti-check";
-  setTimeout(() => { icon.className = "ti ti-copy"; }, 1500);
+  label.textContent = "Copied";
+  setTimeout(() => {
+    icon.className = "ti ti-copy";
+    label.textContent = "Copy";
+  }, 1500);
 });
 
 async function loadTeam() {

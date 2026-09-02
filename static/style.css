@@ -385,8 +385,29 @@ button:disabled {
 }
 .dash-role-badge { background: var(--accent); color: #fdf3ee; font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 999px; text-transform: capitalize; }
 
-.org-link-box {
-  display: flex; align-items: center; justify-content: space-between;
-  background: var(--bubble-bot); border-radius: var(--radius, 10px); padding: 12px 16px;
-  font-family: monospace; font-size: 13px; margin-bottom: 20px;
+.screening-link-card {
+  background: var(--panel); border: 0.5px solid var(--border); border-radius: 14px;
+  padding: 20px 22px; margin-bottom: 20px;
 }
+.screening-link-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  font-size: 14px; font-weight: 600; color: var(--text);
+}
+.screening-link-header i { color: var(--accent); font-size: 18px; }
+.screening-link-desc { font-size: 12.5px; color: var(--muted); margin: 0 0 14px; }
+.screening-link-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--bubble-bot); border-radius: 8px; padding: 10px 14px;
+}
+.screening-link-value {
+  font-family: monospace; font-size: 13px; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.screening-link-copy-btn {
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+  background: var(--accent); color: #fdf3ee; border: none; border-radius: 6px;
+  padding: 7px 14px; font-size: 12.5px; font-weight: 500; cursor: pointer;
+  transition: opacity 0.15s;
+}
+.screening-link-copy-btn:hover { opacity: 0.9; }
+.screening-link-copy-btn i { font-size: 15px; }

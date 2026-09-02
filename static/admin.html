@@ -82,11 +82,19 @@
     <div id="tab-team" class="tab-panel">
       <div style="padding:20px 28px;">
         <button id="generate-invite-btn" class="landing-btn landing-btn-primary" style="margin-bottom:20px;">Generate invite code</button>
-        <div class="org-link-box">
-          <span id="screening-link-text">Loading…</span>
-          <button id="copy-link-btn" style="background:none; border:none; cursor:pointer; color:var(--muted); display:flex;" title="Copy link">
-            <i class="ti ti-copy" id="copy-link-icon"></i>
-          </button>
+        <div class="screening-link-card">
+          <div class="screening-link-header">
+            <i class="ti ti-link"></i>
+            <span>Candidate screening link</span>
+          </div>
+          <p class="screening-link-desc">Share this with candidates to start their screening for your org.</p>
+          <div class="screening-link-row">
+            <span id="screening-link-text" class="screening-link-value">Loading…</span>
+            <button id="copy-link-btn" class="screening-link-copy-btn" title="Copy link">
+              <i class="ti ti-copy" id="copy-link-icon"></i>
+              <span id="copy-link-label">Copy</span>
+            </button>
+          </div>
         </div>
         <div id="invite-code-display" style="display:none; align-items:center; justify-content:space-between; gap:12px; padding:14px 18px; margin-bottom:20px; background:var(--bubble-bot); border-radius:8px; font-family:monospace; font-size:14px;">
           <span id="invite-code-text"></span>
