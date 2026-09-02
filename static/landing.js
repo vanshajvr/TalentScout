@@ -31,6 +31,8 @@ function getOrgSlugFromPath() {
   return match ? match[1] : null;
 }
 
+window.CURRENT_ORG_SLUG = getOrgSlugFromPath();
+
 if (window.CURRENT_ORG_SLUG) {
   const landing = document.getElementById("landing-view");
   const home = document.getElementById("home-view");
