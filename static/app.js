@@ -195,7 +195,8 @@ function maybeShowResumeUpload() {
 }
 
 async function startSession() {
-  const res = await fetch(`${API}/sessions`, { method: "POST" });
+  const orgParam = window.CURRENT_ORG_SLUG ? `?org=${window.CURRENT_ORG_SLUG}` : "";
+  const res = await fetch(`${API}/sessions${orgParam}`, { method: "POST" });
   const data = await res.json();
   sessionId = data.session_id;
   addBubble("assistant", data.message);

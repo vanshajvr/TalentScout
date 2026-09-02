@@ -30,3 +30,7 @@ def serve_login_frontend():
 @app.get("/admin")
 def serve_admin_frontend():
     return FileResponse("static/admin.html")
+
+@app.get("/screen/{org_slug}")
+def serve_org_screening_page(org_slug: str):
+    return FileResponse("static/index.html")

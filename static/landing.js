@@ -26,6 +26,22 @@ const DEMO_SCRIPT = [
   { role: "user", text: "A silent state bug that only hit on the first request." },
 ];
 
+function getOrgSlugFromPath() {
+  const match = window.location.pathname.match(/^\/screen\/([a-z0-9-]+)$/);
+  return match ? match[1] : null;
+}
+
+if (window.CURRENT_ORG_SLUG) {
+  const landing = document.getElementById("landing-view");
+  const home = document.getElementById("home-view");
+  if (landing && home) {
+    landing.style.display = "none";
+    home.style.display = "grid";
+  }
+}
+
+window.CURRENT_ORG_SLUG = getOrgSlugFromPath();
+
 async function typeText(el, text, speed = 22) {
   el.textContent = "";
   for (let i = 0; i < text.length; i++) {
