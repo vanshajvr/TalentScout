@@ -69,6 +69,7 @@ def recruiter_signup(body: SignupRequest, db: SQLASession = Depends(get_db)):
 
     token_row.used_by = recruiter.id
     token_row.used_at = datetime.now()
+    token_row.used_by_name = recruiter.name
     db.commit()
 
     token = secrets.token_urlsafe(32)

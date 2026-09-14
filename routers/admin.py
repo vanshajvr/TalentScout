@@ -121,15 +121,11 @@ def create_invite_token(db: SQLASession = Depends(get_db), admin: Recruiter = De
 @router.get("/invites")
 def list_invites(db: SQLASession = Depends(get_db), admin: Recruiter = Depends(require_admin)):
     tokens = db.query(InviteToken).filter(InviteToken.org_id == admin.org_id).order_by(InviteToken.created_at.desc()).all()
-    used_ids = {t.used_by for t in tokens if t.used_by}
-    used_recruiters = {
-        r.id: r.name for r in db.query(Recruiter).filter(Recruiter.id.in_(used_ids)).all()
-    } if used_ids else {}
     return [
         {
             "code": t.code, "created_at": t.created_at.isoformat() if t.created_at else None,
-            "used": t.used_by is not None,
-            "used_by_name": used_recruiters.get(t.used_by) if t.used_by else None,
+            "used": t.used_at is not None,
+            "used_by_name": t.used_by_name,
             "used_at": t.used_at.isoformat() if t.used_at else None,
         }
         for t in tokens
