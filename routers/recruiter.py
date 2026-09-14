@@ -1,10 +1,9 @@
 import csv
 import io
-import secrets
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as SQLASession
@@ -13,7 +12,10 @@ from db.database import get_db
 from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter, SessionLog, InviteToken, Organization
 
 from utils.validators import is_valid_email
-from utils.auth import hash_password, verify_password, issue_token, require_recruiter, _resolve_token
+from utils.auth import (
+    hash_password, verify_password, issue_token, require_recruiter, _resolve_token,
+    record_failed_login, logout as auth_logout,
+)
 
 from utils.schemas import AuthResponse
 
@@ -41,15 +43,20 @@ def get_my_org(db: SQLASession = Depends(get_db), recruiter: Recruiter = Depends
     return {"org_name": org.name, "org_slug": org.slug}
 
 @router.post("/signup", response_model=AuthResponse)
-def recruiter_signup(body: SignupRequest, db: SQLASession = Depends(get_db)):
-    token_row = (
-        db.query(InviteToken)
-        .filter(InviteToken.code == body.invite_code, InviteToken.used_by.is_(None))
-        .first()
-    )
+def recruiter_signup(body: SignupRequest, request: Request, db: SQLASession = Depends(get_db)):
+    ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
+    token_row = db.query(InviteToken).filter(InviteToken.code == body.invite_code).first()
     if token_row is None:
-        raise HTTPException(status_code=403, detail="Invalid or already-used invite code")
-    
+        raise HTTPException(status_code=403, detail="Invalid invite code")
+    if token_row.used_by is not None:
+        raise HTTPException(status_code=403, detail="This invite code has already been used")
+    if token_row.revoked_at is not None:
+        raise HTTPException(status_code=403, detail="This invite code has been revoked")
+    if token_row.expires_at is not None and datetime.utcnow() > token_row.expires_at:
+        raise HTTPException(status_code=403, detail="This invite code has expired")
+
     if not is_valid_email(body.email):
         raise HTTPException(status_code=400, detail="Please enter a valid email address")
 
@@ -68,23 +75,36 @@ def recruiter_signup(body: SignupRequest, db: SQLASession = Depends(get_db)):
     db.refresh(recruiter)
 
     token_row.used_by = recruiter.id
-    token_row.used_at = datetime.now()
     token_row.used_by_name = recruiter.name
+    token_row.used_ip = ip
+    token_row.used_user_agent = user_agent
+    token_row.used_at = datetime.now()
     db.commit()
 
-    token = secrets.token_urlsafe(32)
-    token = issue_token(str(recruiter.id))
+    token = issue_token(recruiter, db, ip=ip, user_agent=user_agent)
     return AuthResponse(token=token, name=recruiter.name)
 
 @router.post("/login", response_model=AuthResponse)
-def recruiter_login(body: LoginRequest, db: SQLASession = Depends(get_db)):
+def recruiter_login(body: LoginRequest, request: Request, db: SQLASession = Depends(get_db)):
+    ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+
     recruiter = db.query(Recruiter).filter(Recruiter.email == body.email).first()
     if recruiter is None or not verify_password(body.password, recruiter.password_salt, recruiter.password_hash):
+        record_failed_login(db, body.email, ip, user_agent)
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
-    token = secrets.token_urlsafe(32)
-    token = issue_token(str(recruiter.id))
+    token = issue_token(recruiter, db, ip=ip, user_agent=user_agent)
     return AuthResponse(token=token, name=recruiter.name)
+
+
+@router.post("/logout")
+def recruiter_logout(authorization: str = Header(None), db: SQLASession = Depends(get_db)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    token = authorization.removeprefix("Bearer ")
+    auth_logout(db, token)
+    return {"logged_out": True}
 
 
 @router.get("/me")
@@ -92,7 +112,7 @@ def get_me(authorization: str = Header(None), db: SQLASession = Depends(get_db))
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Not authenticated")
     token = authorization.removeprefix("Bearer ")
-    recruiter_id = _resolve_token(token)
+    recruiter_id = _resolve_token(token, db)
     recruiter = db.get(Recruiter, uuid.UUID(recruiter_id))
     if recruiter is None:
         raise HTTPException(status_code=401, detail="Account not found")

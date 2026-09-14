@@ -1,5 +1,5 @@
 import uuid
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as SQLASession
 
@@ -9,7 +9,7 @@ from utils.auth import require_admin, hash_password, issue_token
 import re
 import secrets
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from utils.validators import is_valid_email
 
@@ -24,7 +24,7 @@ class OrgSignupRequest(BaseModel):
 
 
 @router.post("/signup", response_model=AuthResponse)
-def create_org_and_admin(body: OrgSignupRequest, db: SQLASession = Depends(get_db)):
+def create_org_and_admin(body: OrgSignupRequest, request: Request, db: SQLASession = Depends(get_db)):
 
     slug = re.sub(r"[^a-z0-9-]", "-", body.org_name.lower()).strip("-")
     if not slug:
@@ -53,8 +53,11 @@ def create_org_and_admin(body: OrgSignupRequest, db: SQLASession = Depends(get_d
     db.commit()
     db.refresh(recruiter)
 
-    token = secrets.token_urlsafe(32)
-    token = issue_token(str(recruiter.id))    
+    token = issue_token(
+        recruiter, db,
+        ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
     return AuthResponse(token=token, name=recruiter.name)
 
 
@@ -83,20 +86,17 @@ def remove_recruiter(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid recruiter_id")
 
-    if target_id == admin.id:
-        raise HTTPException(status_code=400, detail="You can't remove your own account")
-
     target = db.get(Recruiter, target_id)
     if target is None or target.org_id != admin.org_id:
         raise HTTPException(status_code=404, detail="Recruiter not found")
-    
+
     if target.role == "admin":
         remaining_admins = db.query(Recruiter).filter(
             Recruiter.org_id == admin.org_id, Recruiter.role == "admin", Recruiter.id != target.id
         ).count()
         if remaining_admins == 0:
             raise HTTPException(status_code=400, detail="Can't remove the last admin in this org")
-        
+
     if target_id == admin.id:
         raise HTTPException(status_code=400, detail="You can't remove your own account")
 
@@ -104,29 +104,66 @@ def remove_recruiter(
     db.commit()
     return {"removed": True}
 
-
 class InviteTokenResponse(BaseModel):
     code: str
 
 
+class CreateInviteRequest(BaseModel):
+    expires_in_days: int | None = None
+
+
 @router.post("/invite", response_model=InviteTokenResponse)
-def create_invite_token(db: SQLASession = Depends(get_db), admin: Recruiter = Depends(require_admin)):
+def create_invite_token(
+    body: CreateInviteRequest = CreateInviteRequest(),
+    db: SQLASession = Depends(get_db),
+    admin: Recruiter = Depends(require_admin),
+):
     code = secrets.token_urlsafe(12)
-    token_row = InviteToken(code=code, org_id=admin.org_id, created_by=admin.id)
+    expires_at = (
+        datetime.utcnow() + timedelta(days=body.expires_in_days)
+        if body.expires_in_days is not None else None
+    )
+    token_row = InviteToken(code=code, org_id=admin.org_id, created_by=admin.id, expires_at=expires_at)
     db.add(token_row)
     db.commit()
     return InviteTokenResponse(code=code)
 
 
+class RevokeInviteRequest(BaseModel):
+    code: str
+
+
+@router.post("/invite/revoke")
+def revoke_invite_token(
+    body: RevokeInviteRequest,
+    db: SQLASession = Depends(get_db),
+    admin: Recruiter = Depends(require_admin),
+):
+    token_row = db.query(InviteToken).filter(
+        InviteToken.code == body.code, InviteToken.org_id == admin.org_id
+    ).first()
+    if token_row is None:
+        raise HTTPException(status_code=404, detail="Invite code not found")
+
+    token_row.revoked_at = datetime.utcnow()
+    token_row.revoked_by = admin.id
+    db.commit()
+    return {"revoked": True}
+
+
 @router.get("/invites")
 def list_invites(db: SQLASession = Depends(get_db), admin: Recruiter = Depends(require_admin)):
     tokens = db.query(InviteToken).filter(InviteToken.org_id == admin.org_id).order_by(InviteToken.created_at.desc()).all()
+    now = datetime.utcnow()
     return [
         {
             "code": t.code, "created_at": t.created_at.isoformat() if t.created_at else None,
             "used": t.used_at is not None,
             "used_by_name": t.used_by_name,
             "used_at": t.used_at.isoformat() if t.used_at else None,
+            "expires_at": t.expires_at.isoformat() if t.expires_at else None,
+            "expired": t.expires_at is not None and t.used_at is None and now > t.expires_at,
+            "revoked_at": t.revoked_at.isoformat() if t.revoked_at else None,
         }
         for t in tokens
     ]
@@ -172,8 +209,12 @@ def admin_overview(db: SQLASession = Depends(get_db), admin: Recruiter = Depends
         raise HTTPException(status_code=404, detail="Organization not found")
     team_count = db.query(Recruiter).filter(Recruiter.org_id == admin.org_id).count()
     candidate_count = db.query(Candidate).filter(Candidate.org_id == admin.org_id).count()
+    now = datetime.utcnow()
     pending_invites = db.query(InviteToken).filter(
-        InviteToken.org_id == admin.org_id, InviteToken.used_by.is_(None)
+        InviteToken.org_id == admin.org_id,
+        InviteToken.used_by.is_(None),
+        InviteToken.revoked_at.is_(None),
+        (InviteToken.expires_at.is_(None)) | (InviteToken.expires_at > now),
     ).count()
     return {
         "org_name": org.name, "org_slug": org.slug,

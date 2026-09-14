@@ -125,6 +125,27 @@ class InviteToken(Base):
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recruiters.id"), nullable=True)
     used_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recruiters.id", ondelete="SET NULL"), nullable=True)
     used_by_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    used_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    used_user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
     used_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    revoked_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recruiters.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"))
+
+
+class RecruiterSession(Base):
+    __tablename__ = "recruiter_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    recruiter_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recruiters.id", ondelete="SET NULL"), nullable=True)
+    org_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True)
+    email_attempted: Mapped[str] = mapped_column(String(255))
+    success: Mapped[bool] = mapped_column(Boolean)
+    ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    token_hash: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    ended_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    end_reason: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "logout" | "expired" | "invalidated"
