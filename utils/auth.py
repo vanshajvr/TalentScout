@@ -47,9 +47,17 @@ def issue_token(
     return token
 
 
-def record_failed_login(db: SQLASession, email: str, ip: str | None, user_agent: str | None) -> None:
+def record_failed_login(
+    db: SQLASession, email: str, ip: str | None, user_agent: str | None,
+    recruiter: Recruiter | None = None,
+) -> None:
+    # Linking recruiter_id/org_id when the email matches a real account (even though the
+    # password was wrong) distinguishes "guessing against a known employee" from "hitting a
+    # made-up address" — the former is the stronger signal for spotting a targeted attack.
     db.add(RecruiterSession(
-        recruiter_id=None, org_id=None, email_attempted=email[:255],
+        recruiter_id=recruiter.id if recruiter else None,
+        org_id=recruiter.org_id if recruiter else None,
+        email_attempted=email[:255],
         success=False, ip=ip, user_agent=user_agent, token_hash=None,
         started_at=datetime.utcnow(),
     ))
