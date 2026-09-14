@@ -89,13 +89,16 @@ def remove_recruiter(
     target = db.get(Recruiter, target_id)
     if target is None or target.org_id != admin.org_id:
         raise HTTPException(status_code=404, detail="Recruiter not found")
-
+    
     if target.role == "admin":
         remaining_admins = db.query(Recruiter).filter(
             Recruiter.org_id == admin.org_id, Recruiter.role == "admin", Recruiter.id != target.id
         ).count()
         if remaining_admins == 0:
             raise HTTPException(status_code=400, detail="Can't remove the last admin in this org")
+        
+    if target_id == admin.id:
+        raise HTTPException(status_code=400, detail="You can't remove your own account")
 
     db.delete(target)
     db.commit()
