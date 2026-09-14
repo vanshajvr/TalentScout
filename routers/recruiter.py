@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as SQLASession
 
+import db
 from db.database import get_db
 from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter, SessionLog, InviteToken, Organization
 
@@ -91,7 +92,7 @@ def recruiter_login(body: LoginRequest, request: Request, db: SQLASession = Depe
 
     recruiter = db.query(Recruiter).filter(Recruiter.email == body.email).first()
     if recruiter is None or not verify_password(body.password, recruiter.password_salt, recruiter.password_hash):
-        record_failed_login(db, body.email, ip, user_agent)
+        record_failed_login(db, body.email, ip, user_agent,recruiter=recruiter)
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
     token = issue_token(recruiter, db, ip=ip, user_agent=user_agent)

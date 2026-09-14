@@ -74,6 +74,18 @@ def client():
     return TestClient(app)
 
 
+@pytest.fixture
+def db_session():
+    """Direct DB access for tests that need to verify things no API response exposes
+    (e.g. RecruiterSession.token_hash, InviteToken.used_ip)."""
+    from db.database import SessionLocal
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
 def unique_email(local_prefix: str = "test") -> str:
     """
     A real, deliverable domain (gmail.com) so utils.validators.is_valid_email's

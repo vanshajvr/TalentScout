@@ -79,11 +79,22 @@ def test_successful_login_creates_session_row(client, signup_org, db_session):
     assert row.end_reason is None
 
 
-def test_failed_login_creates_session_row():
-    # TODO: wrong password against a real email -> RecruiterSession row with
-    # success=False, recruiter_id/org_id linked (per the fix above),
-    # token_hash is None.
-    pass
+def test_failed_login_creates_session_row(client, signup_org, db_session):
+    admin = signup_org()
+    team = client.get("/admin/team", headers={"Authorization": f"Bearer {admin['token']}"}).json()
+    admin_id = next(r["id"] for r in team if r["email"] == admin["email"])
+
+    resp = client.post("/recruiter/login", json={"email": admin["email"], "password": "wrong-password"})
+    assert resp.status_code == 401
+
+    row = db_session.query(RecruiterSession).filter(
+        RecruiterSession.email_attempted == admin["email"], RecruiterSession.success.is_(False)
+    ).order_by(RecruiterSession.started_at.desc()).first()
+
+    assert row is not None
+    assert str(row.recruiter_id) == admin_id
+    assert row.token_hash is None
+    assert row.ended_at is None
 
 
 def test_logout_closes_session_row():
