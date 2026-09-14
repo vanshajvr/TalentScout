@@ -67,8 +67,11 @@ function currentFilters() {
   return params;
 }
 
-async function authedFetch(url) {
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+async function authedFetch(url, options = {}) {
+  const res = await fetch(url, {
+    ...options,
+    headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` },
+  });
   if (res.status === 401) {
     localStorage.removeItem("recruiter_token");
     token = null;
@@ -212,7 +215,15 @@ responsesSelect.addEventListener("change", () => {
   loadCandidateQuestions(responsesSelect.value);
 });
 
-document.getElementById("logout-btn").addEventListener("click", () => {
+document.getElementById("logout-btn").addEventListener("click", async () => {
+  try {
+    await fetch(`${API}/recruiter/logout`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (e) {
+    // Best-effort — still log out locally even if this call fails (e.g. offline).
+  }
   localStorage.removeItem("recruiter_token");
   token = null;
   window.location.href = "/login";

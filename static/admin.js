@@ -226,7 +226,15 @@ copyInviteBtn.addEventListener("click", async () => {
   setTimeout(() => { copyInviteIcon.className = "ti ti-copy"; }, 1500);
 });
 
-document.getElementById("logout-btn").addEventListener("click", () => {
+document.getElementById("logout-btn").addEventListener("click", async () => {
+  try {
+    await fetch(`${API}/recruiter/logout`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (e) {
+    // Best-effort — still log out locally even if this call fails (e.g. offline).
+  }
   localStorage.removeItem("admin_token");
   token = null;
   window.location.href = "/login";
