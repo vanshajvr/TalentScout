@@ -31,9 +31,11 @@ def test_admin_can_access_admin_only_route(client, signup_org):
     assert body[0]["role"] == "admin"
 
 
-def test_unauthenticated_request_gets_401():
-    # TODO: no Authorization header on a protected route -> 401, not 403/500.
-    pass
+def test_unauthenticated_request_gets_401(client):
+    resp = client.get("/admin/team")
+
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Not authenticated"
 
 
 # --- Token expiry ---
