@@ -1,6 +1,7 @@
 import uuid
 import copy
 import os
+from datetime import datetime
 
 import pdfplumber
 from docx import Document as DocxDocument
@@ -122,6 +123,19 @@ def _difficulty_tier(experience: str) -> str:
 
 def _log_event(db: SQLASession, session_uuid: uuid.UUID, event_type: str, detail: str):
     db.add(SessionLog(session_id=session_uuid, event_type=event_type, detail=detail))
+    db.commit()
+
+def _mark_step(db: SQLASession, session_uuid: uuid.UUID, session_row: SessionModel, new_step: str):
+    """Advances session_row.current_step, logging the transition, and — if the new step
+    is the final one — marks the session completed. Previously current_step/status were
+    updated inline at each of the three call sites with no completion tracking at all,
+    so status stayed "in_progress" forever and completed_at was never set."""
+    if session_row.current_step != new_step:
+        _log_event(db, session_uuid, "step_transition", f"{session_row.current_step} -> {new_step}")
+    session_row.current_step = new_step
+    if new_step == "end" and session_row.status != "completed":
+        session_row.status = "completed"
+        session_row.completed_at = datetime.utcnow()
     db.commit()
 
 def _format_history(qa_history: list[tuple[str, str]]) -> str:
@@ -270,10 +284,7 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
     for msg in result.bot_messages:
         db.add(Message(session_id=session_uuid, role="assistant", content=msg))
 
-    if session_row.current_step != state.step:
-        _log_event(db, session_uuid, "step_transition", f"{session_row.current_step} -> {state.step}")
-    session_row.current_step = state.step
-    db.commit()
+    _mark_step(db, session_uuid, session_row, state.step)
 
     _sync_candidate_row(db, session_row.candidate_id, state)
 
@@ -361,10 +372,7 @@ def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession
 
     db.add(Message(session_id=session_uuid, role="user", content=f"[uploaded resume: {file.filename}]"))
     db.add(Message(session_id=session_uuid, role="assistant", content=bot_reply))
-    if session_row.current_step != state.step:
-        _log_event(db, session_uuid, "step_transition", f"{session_row.current_step} -> {state.step}")
-    session_row.current_step = state.step
-    db.commit()
+    _mark_step(db, session_uuid, session_row, state.step)
 
     return MessageResponse(
             messages=[bot_reply], step=state.step, candidate=vars(state.candidate), extracted=extracted,
@@ -435,10 +443,7 @@ def confirm_resume_data(session_id: str, body: ConfirmResumeRequest, db: SQLASes
     for msg in result.bot_messages:
         db.add(Message(session_id=session_uuid, role="assistant", content=msg))
 
-    if session_row.current_step != state.step:
-        _log_event(db, session_uuid, "step_transition", f"{session_row.current_step} -> {state.step}")
-    session_row.current_step = state.step
-    db.commit()
+    _mark_step(db, session_uuid, session_row, state.step)
     
     _sync_candidate_row(db, session_row.candidate_id, state)
 
