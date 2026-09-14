@@ -225,8 +225,11 @@ def delete_candidates(
 def candidate_logs(
     candidate_id: str, db: SQLASession = Depends(get_db),
     recruiter: Recruiter = Depends(require_recruiter),
-):
-    cid = uuid.UUID(candidate_id)
+):  
+    try:
+        cid = uuid.UUID(candidate_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid candidate_id")
     candidate_row = db.get(Candidate, cid)
     if candidate_row is None or candidate_row.org_id != recruiter.org_id:
         raise HTTPException(status_code=404, detail="Candidate not found")
