@@ -9,14 +9,26 @@ Filled in one test at a time — see conftest.py for shared fixtures
 
 # --- Role gating ---
 
-def test_non_admin_recruiter_gets_403_on_admin_only_route():
-    # TODO: a plain recruiter (not admin) hitting e.g. GET /admin/team gets 403.
-    pass
+def test_non_admin_recruiter_gets_403_on_admin_only_route(client, signup_org, invite_and_signup_recruiter):
+    admin = signup_org()
+    recruiter = invite_and_signup_recruiter(admin["token"])
+
+    resp = client.get("/admin/team", headers={"Authorization": f"Bearer {recruiter['token']}"})
+
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "Admin access required"
 
 
-def test_admin_can_access_admin_only_route():
-    # TODO: sanity check the positive case — admin token succeeds on the same route.
-    pass
+def test_admin_can_access_admin_only_route(client, signup_org):
+    admin = signup_org()
+
+    resp = client.get("/admin/team", headers={"Authorization": f"Bearer {admin['token']}"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 1
+    assert body[0]["email"] == admin["email"]
+    assert body[0]["role"] == "admin"
 
 
 def test_unauthenticated_request_gets_401():
