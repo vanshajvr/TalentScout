@@ -86,7 +86,7 @@ def test_invite_code_is_single_use(client, signup_org):
     })
 
     assert second_resp.status_code == 403
-    assert second_resp.json()["detail"] == "Invalid or already-used invite code"
+    assert second_resp.json()["detail"] == "This invite code has already been used"
 
 
 def test_invalid_invite_code_rejected(client):
@@ -96,7 +96,7 @@ def test_invalid_invite_code_rejected(client):
     })
 
     assert resp.status_code == 403
-    assert resp.json()["detail"] == "Invalid or already-used invite code"
+    assert resp.json()["detail"] == "Invalid invite code"
 
 
 # --- Last-admin protection ---
