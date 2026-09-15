@@ -5,7 +5,7 @@ let pastedThisTurn = false;
 
 const STEPS_ORDER = [
   "greeting", "ask_name", "upload_resume", "confirm_resume_data",
-  "interviewing", "end"
+  "mcq_assessment", "end"
 ];
 
 const chatEl = document.getElementById("chat");
@@ -157,6 +157,8 @@ function showResumeConfirmCard(extracted, sessionData) {
           if (el) el.disabled = false;
         });
         setInputEnabled(false); // stay in card-editing mode, not free text
+      } else if (data.step === "mcq_assessment") {
+        window.location.href = `/static/mcq.html?session_id=${sessionId}`;
       } else {
         setInputEnabled(true);
       }
@@ -218,7 +220,7 @@ async function sendMessage() {
   setInputEnabled(false);
 
   const expectingGeneration =
-    lastKnownStep === "confirm_tech_stack" || lastKnownStep === "interviewing";
+    lastKnownStep === "confirm_tech_stack" || lastKnownStep === "mcq_assessment";
 
   if (expectingGeneration) showGeneratingPanel();
   else showTyping();

@@ -21,7 +21,7 @@ Output ONLY a strict JSON array, no commentary, no markdown fences:
 [
   {{
     "format": "<one of the 5 formats above, exact string>",
-    "question_text": "<the question; for spot_the_bug, include a short code snippet inline using \\n for line breaks>",
+    "question_text": "<the question; for spot_the_bug, wrap any code snippet in triple backticks like ```code here``` with \\n for line breaks inside it>",
     "options": [
       {{"id": "a", "text": "..."}},
       {{"id": "b", "text": "..."}},

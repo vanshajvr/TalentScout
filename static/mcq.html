@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Technical Assessment — TalentScout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+</head>
+<body class="mcq-body">
+
+<div id="mcq-root" class="mcq-root">
+
+  <!-- Instructions screen -->
+  <div id="mcq-intro" class="mcq-screen">
+    <p class="mcq-intro-title">Technical assessment</p>
+    <p class="mcq-intro-sub">17 questions, in three parts. Read through how it works before you start.</p>
+
+    <div class="mcq-intro-cards">
+      <div class="mcq-intro-card">
+        <div class="mcq-intro-icon"><i class="ti ti-clock" aria-hidden="true"></i></div>
+        <div>
+          <p class="mcq-intro-card-title">10 technical questions — 60 seconds each</p>
+          <p class="mcq-intro-card-desc">Once you answer, you move to the next question. There's no going back.</p>
+        </div>
+      </div>
+      <div class="mcq-intro-card">
+        <div class="mcq-intro-icon"><i class="ti ti-message-circle" aria-hidden="true"></i></div>
+        <div>
+          <p class="mcq-intro-card-title">5 behavioral questions — no time limit</p>
+          <p class="mcq-intro-card-desc">There's no right or wrong answer here — take your time.</p>
+        </div>
+      </div>
+      <div class="mcq-intro-card">
+        <div class="mcq-intro-icon"><i class="ti ti-pencil" aria-hidden="true"></i></div>
+        <div>
+          <p class="mcq-intro-card-title">2 short written responses — 300 characters max</p>
+          <p class="mcq-intro-card-desc">Keep it brief and to the point.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="mcq-notice">
+      <i class="ti ti-eye" aria-hidden="true"></i>
+      <p>This assessment runs in full screen. Leaving full screen or switching tabs is recorded and visible to the hiring team.</p>
+    </div>
+
+    <button id="mcq-begin-btn" class="mcq-primary-btn">
+      Begin assessment <i class="ti ti-arrow-right" aria-hidden="true"></i>
+    </button>
+    <p id="mcq-intro-error" class="mcq-error" style="display:none;"></p>
+  </div>
+
+  <!-- Question screen -->
+  <div id="mcq-question" class="mcq-screen" style="display:none;">
+    <div class="mcq-header-row">
+      <div class="mcq-progress-wrap">
+        <span id="mcq-progress-label" class="mcq-progress-label"></span>
+        <div class="mcq-progress-track"><div id="mcq-progress-fill" class="mcq-progress-fill"></div></div>
+      </div>
+      <div id="mcq-timer" class="mcq-timer" style="display:none;"></div>
+    </div>
+
+    <div class="mcq-card">
+      <p id="mcq-question-text" class="mcq-question-text"></p>
+      <pre id="mcq-code-block" class="mcq-code-block" style="display:none;"></pre>
+    </div>
+
+    <div id="mcq-options" class="mcq-options"></div>
+
+    <div id="mcq-open-text-wrap" class="mcq-open-text-wrap" style="display:none;">
+      <textarea id="mcq-open-text" class="mcq-open-text" maxlength="300" placeholder="Type your answer here…"></textarea>
+      <span id="mcq-char-count" class="mcq-char-count">0 / 300</span>
+    </div>
+
+    <div class="mcq-footer-row">
+      <button id="mcq-next-btn" class="mcq-primary-btn" disabled>
+        Next <i class="ti ti-arrow-right" aria-hidden="true"></i>
+      </button>
+    </div>
+    <p id="mcq-question-error" class="mcq-error" style="display:none;"></p>
+  </div>
+
+  <!-- Summary screen -->
+  <div id="mcq-summary" class="mcq-screen" style="display:none;">
+    <div class="mcq-summary-check"><i class="ti ti-check" aria-hidden="true"></i></div>
+    <p class="mcq-intro-title" style="text-align:center;">Assessment complete</p>
+    <p id="mcq-summary-time" class="mcq-summary-time"></p>
+
+    <div class="mcq-summary-card">
+      <div class="mcq-summary-row"><span>Technical questions</span><span>10 of 10 answered</span></div>
+      <div class="mcq-summary-row"><span>Behavioral questions</span><span>5 of 5 answered</span></div>
+      <div class="mcq-summary-row mcq-summary-row-last"><span>Written responses</span><span>2 of 2 answered</span></div>
+    </div>
+
+    <p class="mcq-summary-note">Your responses have been recorded. The hiring team will follow up if there's a next step.</p>
+
+    <button id="mcq-finish-btn" class="mcq-primary-btn" style="align-self:center;">Done</button>
+  </div>
+
+</div>
+
+<script src="/static/mcq.js"></script>
+</body>
+</html>
