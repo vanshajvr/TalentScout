@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from routers import candidate, recruiter, admin
+from routers import candidate, recruiter, admin, mcq
 
 app = FastAPI(title="TalentScout API")
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -13,6 +13,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(candidate.router)
 app.include_router(recruiter.router)
 app.include_router(admin.router)
+app.include_router(mcq.router)
 
 @app.get("/")
 def serve_frontend():

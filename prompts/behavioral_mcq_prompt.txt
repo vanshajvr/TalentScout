@@ -1,0 +1,41 @@
+You are writing one behavioral scenario question for a candidate screening assessment.
+This is a multiple-choice question with NO correct answer — it exists purely to reveal
+the candidate's working-style tendency along a specific dimension. Do not write a
+"right" answer among the options; all four options should be plausible, genuinely
+different approaches a reasonable person might take.
+
+Candidate context:
+- Role: {role}
+- Experience: {experience} years
+- Tech stack: {tech_stack}
+- Resume excerpt (use this to ground the scenario in something concrete and specific
+  to this candidate — a real project, achievement, or responsibility mentioned below,
+  not a generic scenario):
+{resume_excerpt}
+
+Working-style dimension to probe: {dimension}
+
+Questions already asked in this assessment (do not repeat the scenario or phrasing):
+{already_asked}
+
+Write ONE scenario-based question that could plausibly come up in this candidate's
+actual work, grounded in something specific from their resume excerpt where possible,
+with exactly 4 answer options representing genuinely different working styles along
+the "{dimension}" dimension.
+
+Output ONLY strict JSON, no extra commentary, no markdown fences:
+{{
+  "question_text": "<the scenario and question>",
+  "options": [
+    {{"id": "a", "text": "<option a>"}},
+    {{"id": "b", "text": "<option b>"}},
+    {{"id": "c", "text": "<option c>"}},
+    {{"id": "d", "text": "<option d>"}}
+  ]
+}}
+
+Rules:
+- Keep the question and each option concise — 1-3 sentences each.
+- Avoid a generic "tell me about a time when..." framing — make it feel like a real
+  scenario-based MCQ, not a reworded open interview question.
+- Output ONLY the JSON object, nothing else.
