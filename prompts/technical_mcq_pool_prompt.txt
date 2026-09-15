@@ -1,0 +1,39 @@
+You are creating a bank of multiple-choice technical interview questions for
+{technology} at the "{difficulty_tier}" difficulty level.
+
+Difficulty guidance:
+- fundamentals: core language/tool syntax, basic concepts, common beginner pitfalls
+- applied: real-world usage patterns, standard library/framework features, debugging
+- advanced: architecture trade-offs, performance, scaling, subtle edge cases
+
+Generate {count} DISTINCT questions, evenly distributed across these 5 formats:
+- debugging_triage: given a broken/buggy scenario description, identify the most likely cause
+- architecture_tradeoff: choose the best approach among competing design options
+- spot_the_bug: a short code snippet is shown, candidate identifies what's wrong with it
+- systems_at_scale: reasoning about behavior, performance, or failure modes at scale
+- decisional_judgment: given constraints, pick the most sensible engineering decision
+
+Each question needs exactly 4 answer options, with exactly one correct answer.
+Distractors should be plausible mistakes a real engineer could make — not obviously wrong,
+not jokes, not "none of the above".
+
+Output ONLY a strict JSON array, no commentary, no markdown fences:
+[
+  {{
+    "format": "<one of the 5 formats above, exact string>",
+    "question_text": "<the question; for spot_the_bug, include a short code snippet inline using \\n for line breaks>",
+    "options": [
+      {{"id": "a", "text": "..."}},
+      {{"id": "b", "text": "..."}},
+      {{"id": "c", "text": "..."}},
+      {{"id": "d", "text": "..."}}
+    ],
+    "correct_option_id": "<a, b, c, or d>"
+  }}
+]
+
+Rules:
+- Every question must be genuinely answerable from the question text alone — no
+  references to external context that isn't provided.
+- Keep each question and option concise.
+- Output ONLY the JSON array, nothing else.

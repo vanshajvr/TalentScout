@@ -174,6 +174,7 @@ class MCQAssessment(Base):
     status: Mapped[str] = mapped_column(String(20), default="in_progress")  # in_progress | completed
     current_question_index: Mapped[int] = mapped_column(default=0)
     tab_switch_count: Mapped[int] = mapped_column(default=0)
+    fullscreen_exit_count: Mapped[int] = mapped_column(default=0)
     started_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
@@ -196,3 +197,4 @@ class MCQAnswer(Base):
     answered_at: Mapped[datetime | None] = mapped_column(nullable=True)
     time_taken_seconds: Mapped[int | None] = mapped_column(nullable=True)
     tab_switch_count: Mapped[int] = mapped_column(default=0)
+    fullscreen_exit_count: Mapped[int] = mapped_column(default=0)

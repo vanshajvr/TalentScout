@@ -1,244 +1,366 @@
 const API = "";
-let token = localStorage.getItem("admin_token") || null;
+let sessionId = null;
+let lastKnownStep = null;
+let pastedThisTurn = false;
 
-const loginView = document.getElementById("login-view");
-const dashView = document.getElementById("dash-view");
-const loginMode = document.getElementById("login-mode");
-const signupMode = document.getElementById("signup-mode");
-const loginEmail = document.getElementById("login-email");
-const loginPassword = document.getElementById("login-password");
-const loginBtn = document.getElementById("login-btn");
-const loginError = document.getElementById("login-error");
-const signupOrgname = document.getElementById("signup-orgname");
-const signupName = document.getElementById("signup-name");
-const signupEmail = document.getElementById("signup-email");
-const signupPassword = document.getElementById("signup-password");
-const signupBtn = document.getElementById("signup-btn");
-const signupError = document.getElementById("signup-error");
-const teamBody = document.getElementById("team-body");
-const invitesBody = document.getElementById("invites-body");
-const orgSub = document.getElementById("org-sub");
-const generateInviteBtn = document.getElementById("generate-invite-btn");
-const inviteCodeDisplay = document.getElementById("invite-code-display");
+const STEPS_ORDER = [
+  "greeting", "ask_name", "upload_resume", "confirm_resume_data",
+  "mcq_assessment", "end"
+];
 
-const inviteCodeText = document.getElementById("invite-code-text");
-const copyInviteBtn = document.getElementById("copy-invite-btn");
-const copyInviteIcon = document.getElementById("copy-invite-icon");
+const chatEl = document.getElementById("chat");
+const inputEl = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+const statusLine = document.getElementById("status-line");
+const pasteNote = document.getElementById("paste-note");
+const progressFill = document.getElementById("progress-fill");
+const progressLabel = document.getElementById("progress-label");
+const resumeInput = document.getElementById("resume-input");
+const uploadTrigger = document.getElementById("upload-trigger");
 
-const dashOrgName = document.getElementById("dash-org-name");
-const dashUserBlock = document.getElementById("dash-user-block");
-const dashUserName = document.getElementById("dash-user-name");
-const dashUserEmail = document.getElementById("dash-user-email");
-const dashAvatar = document.getElementById("dash-avatar");
-const dashRoleBadge = document.getElementById("dash-role-badge");
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-async function authedFetch(url, options = {}) {
-  const res = await fetch(url, {
-    ...options,
-    headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` },
-  });
-  if (res.status === 401) {
-    localStorage.removeItem("admin_token");
-    token = null;
-    dashView.style.display = "none";
-    loginView.style.display = "block";
-    throw new Error("unauthorized");
-  }
-  return res;
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
 }
 
-async function showDashboard() {
-  const meRes = await authedFetch(`${API}/recruiter/me`);
-  const me = await meRes.json();
-
-  if (me.role !== "admin") {
-    localStorage.removeItem("admin_token");
-    token = null;
-    loginView.style.display = "block";
-    loginError.textContent = "This account doesn't have admin access.";
-    loginError.style.display = "block";
-    return;
-  }
-
-  loginView.style.display = "none";
-  dashView.style.display = "grid";
-
-  dashUserName.textContent = me.name;
-  dashUserEmail.textContent = me.email;
-  dashAvatar.textContent = me.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
-  dashRoleBadge.textContent = me.role;
-  dashUserBlock.style.display = "flex";
-
-  const orgRes = await authedFetch(`${API}/admin/overview`);
-  const org = await orgRes.json();
-  dashOrgName.textContent = org.org_name;
-
-  const screeningLink = `${window.location.origin}/screen/${org.org_slug}`;
-  document.getElementById("screening-link-text").textContent = screeningLink;
-
-  loadTeam();
+function formatMessage(text) {
+  const escaped = escapeHtml(text);
+  return escaped.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
 
-document.getElementById("copy-link-btn").addEventListener("click", async () => {
-  const text = document.getElementById("screening-link-text").textContent;
-  await navigator.clipboard.writeText(text);
-  const icon = document.getElementById("copy-link-icon");
-  const label = document.getElementById("copy-link-label");
-  icon.className = "ti ti-check";
-  label.textContent = "Copied";
-  setTimeout(() => {
-    icon.className = "ti ti-copy";
-    label.textContent = "Copy";
-  }, 1500);
-});
+function updateProgress(step) {
+  const idx = STEPS_ORDER.indexOf(step);
+  const total = STEPS_ORDER.length - 1;
+  const pct = idx <= 0 ? 3 : Math.min(100, Math.round((idx / total) * 100));
+  progressFill.style.width = pct + "%";
+  progressLabel.textContent = step === "end"
+    ? "Screening complete"
+    : `Step ${Math.max(idx, 1)} of ${total}`;
+}
 
-async function loadTeam() {
-  const res = await authedFetch(`${API}/admin/team`);
-  if (!res.ok) {
-    teamBody.innerHTML = '<tr><td colspan="5" class="empty-note">Could not load team.</td></tr>';
-    return;
+function addBubble(role, text, wasPasted = false) {
+  const div = document.createElement("div");
+  div.className = "bubble " + (role === "user" ? "user" : "bot");
+  div.innerHTML = formatMessage(text);
+  if (wasPasted) {
+    const tag = document.createElement("span");
+    tag.className = "pasted-tag";
+    tag.textContent = "pasted";
+    div.appendChild(tag);
   }
-  const rows = await res.json();
-  teamBody.innerHTML = "";
-  rows.forEach((r) => {
-    const tr = document.createElement("tr");
-    const otherRole = r.role === "admin" ? "recruiter" : "admin";
-    tr.innerHTML = `
-      <td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.email)}</td>
-      <td><span class="badge ${r.role === "admin" ? "completed" : "in_progress"}">${escapeHtml(r.role)}</span></td>
-      <td>${r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</td>
-      <td style="display:flex; gap:6px;">
-        <button class="role-btn" data-id="${r.id}" data-role="${otherRole}" style="font-size:12px; padding:5px 10px;">Make ${otherRole}</button>
-        <button class="remove-btn" data-id="${r.id}" style="background:var(--warn); color:white; border:none; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer;">Remove</button>
-      </td>
-    `;
-    teamBody.appendChild(tr);
-  });
-  document.querySelectorAll(".role-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const res = await authedFetch(`${API}/admin/team/role`, {
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function showTyping() {
+  const div = document.createElement("div");
+  div.className = "typing";
+  div.id = "typing-indicator";
+  div.innerHTML = "<span></span><span></span><span></span>";
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function showGeneratingPanel() {
+  const div = document.createElement("div");
+  div.className = "gen-panel";
+  div.id = "typing-indicator";
+  div.innerHTML = `
+    <div class="label">Be ready for some questions based on your profile…</div>
+    <div class="gen-track"><div class="gen-fill"></div></div>
+  `;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function showExtractingPanel() {
+  const div = document.createElement("div");
+  div.className = "gen-panel";
+  div.id = "typing-indicator";
+  div.innerHTML = `
+    <div class="label">Extracting information from your resume…</div>
+    <div class="gen-track"><div class="gen-fill"></div></div>
+  `;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function showResumeConfirmCard(extracted, sessionData) {
+  const div = document.createElement("div");
+  div.className = "bubble bot";
+  div.style.maxWidth = "90%";
+  div.innerHTML = `
+    <div style="margin-bottom:10px;">Here's what I found — edit anything, then confirm:</div>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <input id="edit-email" placeholder="Email" value="${extracted.email || ""}">
+      <input id="edit-phone" placeholder="Phone" value="${extracted.phone || ""}">
+      <input id="edit-location" placeholder="Location" value="${extracted.location || ""}">
+      <input id="edit-education" placeholder="Education" value="${extracted.education || ""}">
+      <input id="edit-experience" placeholder="Years of experience" value="${extracted.experience ?? ""}">
+      <input id="edit-role" placeholder="Role" value="${extracted.role || ""}">
+      <input id="edit-tech" placeholder="Tech stack (comma separated)" value="${(extracted.tech_stack || []).join(", ")}">
+      <input id="edit-linkedin" placeholder="LinkedIn URL" value="${extracted.linkedin || ""}">
+      <input id="edit-github" placeholder="GitHub URL" value="${extracted.github || ""}">
+    </div>
+    <button id="confirm-resume-btn" style="margin-top:10px;">Confirm & Continue</button>
+  `;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+
+  document.getElementById("confirm-resume-btn").addEventListener("click", async () => {
+    const confirmBtn = document.getElementById("confirm-resume-btn");
+    const fields = ["edit-email", "edit-phone", "edit-location", "edit-experience",
+                     "edit-role", "edit-tech", "edit-education", "edit-linkedin", "edit-github"];
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Confirming…";
+    fields.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = true;
+    });
+
+    setInputEnabled(false);
+    showTyping();
+
+    const payload = {
+      email: document.getElementById("edit-email").value.trim() || null,
+      phone: document.getElementById("edit-phone").value.trim() || null,
+      location: document.getElementById("edit-location").value.trim() || null,
+      experience: document.getElementById("edit-experience").value.trim() || null,
+      role: document.getElementById("edit-role").value.trim() || null,
+      tech_stack: document.getElementById("edit-tech").value.split(",").map(t => t.trim()).filter(Boolean),
+      education: document.getElementById("edit-education").value.trim() || null,
+      linkedin: document.getElementById("edit-linkedin").value.trim() || null,
+      github: document.getElementById("edit-github").value.trim() || null,
+    };
+
+    try {
+      const res = await fetch(`${API}/sessions/${sessionId}/resume/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recruiter_id: btn.dataset.id, new_role: btn.dataset.role }),
+        body: JSON.stringify(payload),
       });
-      if (res.ok) loadTeam();
-    });
-  });
-  document.querySelectorAll(".remove-btn").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      if (!confirm("Remove this team member?")) return;
-      await authedFetch(`${API}/admin/team/remove`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recruiter_id: btn.dataset.id }),
+      const data = await res.json();
+      removeTyping();
+      data.messages.forEach((m) => addBubble("assistant", m));
+      lastKnownStep = data.step;
+      updateProgress(data.step);
+
+      if (data.step === "confirm_resume_data") {
+        // server bounced it back (e.g. duplicate email) — reopen the card for editing
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = "Confirm & Continue";
+        fields.forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.disabled = false;
+        });
+        setInputEnabled(false); // stay in card-editing mode, not free text
+      } else {
+        setInputEnabled(true);
+      }
+    } catch (err) {
+      removeTyping();
+      addBubble("assistant", "Something went wrong — please try again.");
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Confirm & Continue";
+      fields.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = false;
       });
-      loadTeam();
-    });
+      setInputEnabled(true);
+    }
   });
 }
 
-async function loadInvites() {
-  const rows = await (await authedFetch(`${API}/admin/invites`)).json();
-  invitesBody.innerHTML = "";
-  rows.forEach((i) => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td style="font-family:monospace;">${i.code}</td>
-      <td>${i.created_at ? new Date(i.created_at).toLocaleDateString() : "—"}</td>
-      <td><span class="badge ${i.used ? "completed" : "in_progress"}">${i.used ? "Used" : "Unused"}</span></td>
-      <td>${i.used_by_name || "—"}</td>
-    `;
-    invitesBody.appendChild(tr);
-  });
+function removeTyping() {
+  const el = document.getElementById("typing-indicator");
+  if (el) el.remove();
 }
 
-document.querySelectorAll(".rec-nav-item").forEach((item) => {
-  item.addEventListener("click", () => {
-    document.querySelectorAll(".rec-nav-item").forEach((i) => i.classList.remove("active"));
-    document.querySelectorAll(".tab-panel").forEach((p) => (p.style.display = "none"));
-    item.classList.add("active");
-    document.getElementById(`tab-${item.dataset.tab}`).style.display = "block";
-    if (item.dataset.tab === "invites") loadInvites();
-  });
-});
+function setInputEnabled(enabled) {
+  inputEl.disabled = !enabled;
+  sendBtn.disabled = !enabled;
+  if (enabled) inputEl.focus();
+}
 
-document.getElementById("show-signup").addEventListener("click", (e) => {
-  e.preventDefault();
-  loginMode.style.display = "none";
-  signupMode.style.display = "block";
-});
-document.getElementById("show-login").addEventListener("click", (e) => {
-  e.preventDefault();
-  signupMode.style.display = "none";
-  loginMode.style.display = "block";
-});
-
-loginBtn.addEventListener("click", async () => {
-  loginError.style.display = "none";
-  const res = await fetch(`${API}/recruiter/login`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: loginEmail.value, password: loginPassword.value }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    loginError.textContent = formatError(err);
-    loginError.style.display = "block";
-    return;
+function maybeShowResumeUpload() {
+  if (lastKnownStep === "upload_resume") {
+    setInputEnabled(false);
+    inputEl.placeholder = "Please upload your resume to continue…";
+    uploadTrigger.style.display = "inline-block";
+    setTimeout(() => resumeInput.click(), 400);
   }
+}
+
+async function startSession() {
+  const orgParam = window.CURRENT_ORG_SLUG ? `?org=${window.CURRENT_ORG_SLUG}` : "";
+  const res = await fetch(`${API}/sessions${orgParam}`, { method: "POST" });
   const data = await res.json();
-  token = data.token;
-  localStorage.setItem("admin_token", token);
-  showDashboard();
-});
+  sessionId = data.session_id;
+  addBubble("assistant", data.message);
+  lastKnownStep = "greeting";
+  statusLine.textContent = "Screening in progress";
+  updateProgress("greeting");
+  setInputEnabled(true);
+}
 
-signupBtn.addEventListener("click", async () => {
-  signupError.style.display = "none";
-  const res = await fetch(`${API}/admin/signup`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      org_name: signupOrgname.value, name: signupName.value,
-      email: signupEmail.value, password: signupPassword.value,
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    signupError.textContent = formatError(err);
-    signupError.style.display = "block";
-    return;
-  }
-  const data = await res.json();
-  token = data.token;
-  localStorage.setItem("admin_token", token);
-  showDashboard();
-});
+async function sendMessage() {
+  const text = inputEl.value.trim();
+  if (!text) return;
 
-generateInviteBtn.addEventListener("click", async () => {
-  const res = await authedFetch(`${API}/admin/invite`, { method: "POST" });
-  const data = await res.json();
-  inviteCodeText.textContent = data.code;
-  inviteCodeDisplay.style.display = "flex";
-  loadInvites();
-});
+  addBubble("user", text, pastedThisTurn);
+  inputEl.value = "";
+  inputEl.style.height = "auto";
+  inputEl.classList.remove("pasted-flag");
+  pasteNote.style.display = "none";
+  setInputEnabled(false);
 
-copyInviteBtn.addEventListener("click", async () => {
-  await navigator.clipboard.writeText(inviteCodeText.textContent);
-  copyInviteIcon.className = "ti ti-check";
-  setTimeout(() => { copyInviteIcon.className = "ti ti-copy"; }, 1500);
-});
+  const expectingGeneration =
+    lastKnownStep === "confirm_tech_stack" || lastKnownStep === "mcq_assessment";
 
-document.getElementById("logout-btn").addEventListener("click", async () => {
+  if (expectingGeneration) showGeneratingPanel();
+  else showTyping();
+
+  const wasPasted = pastedThisTurn;
+  pastedThisTurn = false;
+  const startTime = Date.now();
+
   try {
-    await fetch(`${API}/recruiter/logout`, {
+    const res = await fetch(`${API}/sessions/${sessionId}/messages`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, pasted: wasPasted }),
     });
-  } catch (e) {
-    // Best-effort — still log out locally even if this call fails (e.g. offline).
+    const data = await res.json();
+
+    const elapsed = Date.now() - startTime;
+    const minDelay = expectingGeneration ? 0 : 900;
+    if (elapsed < minDelay) await sleep(minDelay - elapsed);
+
+    removeTyping();
+
+    for (let i = 0; i < data.messages.length; i++) {
+      if (i > 0) {
+        showTyping();
+        await sleep(700);
+        removeTyping();
+      }
+      addBubble("assistant", data.messages[i]);
+    }
+
+    lastKnownStep = data.step;
+    updateProgress(data.step);
+    maybeShowResumeUpload();
+
+    if (data.step === "end") {
+      statusLine.textContent = "Screening complete";
+      setInputEnabled(false);
+      return;
+    }
+  } catch (err) {
+    removeTyping();
+    addBubble("assistant", "Something went wrong — please try again.");
   }
-  localStorage.removeItem("admin_token");
-  token = null;
-  window.location.href = "/login";
+
+  setInputEnabled(true);
+}
+
+function goToLanding() {
+  if (document.referrer && document.referrer.includes(window.location.host)) {
+    history.back();
+  } else {
+    document.getElementById("home-view").style.display = "none";
+    document.getElementById("chat-view").style.display = "none";
+    document.getElementById("home-view").classList.remove("view-fade-in");
+    document.getElementById("chat-view").classList.remove("view-fade-in");
+    const landing = document.getElementById("landing-view");
+    landing.classList.remove("view-fade-out", "hidden");
+    landing.style.display = "grid";
+  }
+}
+
+const backHomeBtn = document.getElementById("back-to-landing-home");
+if (backHomeBtn) {
+  backHomeBtn.addEventListener("click", () => goToLanding());
+}
+
+const backChatBtn = document.getElementById("back-to-landing-chat");
+if (backChatBtn) {
+  backChatBtn.addEventListener("click", () => {
+    const confirmed = confirm("Leaving now will end this screening. Are you sure?");
+    if (confirmed) goToLanding();
+  });
+}
+
+resumeInput.addEventListener("change", async () => {
+  const file = resumeInput.files[0];
+  if (!file) return;
+  addBubble("user", `📎 ${file.name}`);
+  setInputEnabled(false);
+  uploadTrigger.disabled = true;
+  showExtractingPanel();;
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const res = await fetch(`${API}/sessions/${sessionId}/resume`, { method: "POST", body: formData });
+    const data = await res.json();
+    removeTyping();
+    if (data.step === "confirm_resume_data" && data.extracted) {
+      showResumeConfirmCard(data.extracted);
+    } else {
+      data.messages.forEach((m) => addBubble("assistant", m));
+    }
+    lastKnownStep = data.step;
+    updateProgress(data.step);
+    uploadTrigger.style.display = "none";
+    inputEl.placeholder = "Type your answer…";
+  } catch (err) {
+    removeTyping();
+    addBubble("assistant", "Upload failed — please try again.");
+  }
+  resumeInput.value = "";
+  setInputEnabled(true);
 });
 
-document.getElementById("back-link").addEventListener("click", goBackOrHome);
-if (token) showDashboard();
+uploadTrigger.addEventListener("click", () => resumeInput.click());
+
+inputEl.addEventListener("paste", () => {
+  pastedThisTurn = true;
+  inputEl.classList.add("pasted-flag");
+  pasteNote.style.display = "block";
+});
+
+inputEl.addEventListener("input", () => {
+  inputEl.style.height = "auto";
+  inputEl.style.height = inputEl.scrollHeight + "px";
+});
+
+inputEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+sendBtn.addEventListener("click", sendMessage);
+
+document.getElementById("start-screening-btn").addEventListener("click", () => {
+  const home = document.getElementById("home-view");
+  const chat = document.getElementById("chat-view");
+
+  home.classList.add("view-fade-out");
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      home.classList.add("hidden");
+    });
+  });
+
+  setTimeout(() => {
+    home.style.display = "none";
+    chat.style.display = "grid";
+    chat.classList.add("view-fade-in");
+    startSession();
+  }, 200);
+});

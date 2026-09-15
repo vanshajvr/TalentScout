@@ -10,3 +10,4 @@ pdfplumber
 python-docx
 groq
 pydantic
+json-repair

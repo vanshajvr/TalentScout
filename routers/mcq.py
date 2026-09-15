@@ -53,6 +53,11 @@ class MCQAnswerRequest(BaseModel):
 
 class TabSwitchResponse(BaseModel):
     tab_switch_count: int
+    fullscreen_exit_count: int
+
+
+class IntegrityEventRequest(BaseModel):
+    event_type: str  # "tab_switch" | "fullscreen_exit"
 
 
 def _starting_difficulty_tier(candidate) -> str:
@@ -337,22 +342,33 @@ def submit_answer(session_id: str, body: MCQAnswerRequest, db: SQLASession = Dep
     return _to_response(next_answer)
 
 
-@router.post("/tab-switch", response_model=TabSwitchResponse)
-def record_tab_switch(session_id: str, db: SQLASession = Depends(get_db)):
+@router.post("/integrity-event", response_model=TabSwitchResponse)
+def record_integrity_event(session_id: str, body: IntegrityEventRequest, db: SQLASession = Depends(get_db)):
+    if body.event_type not in ("tab_switch", "fullscreen_exit"):
+        raise HTTPException(status_code=400, detail="event_type must be 'tab_switch' or 'fullscreen_exit'")
+
     session_uuid, _, _ = _get_session_and_candidate(session_id, db)
 
     assessment = db.query(MCQAssessment).filter(MCQAssessment.session_id == session_uuid).first()
     if assessment is None:
         raise HTTPException(status_code=404, detail="No active assessment for this session")
 
-    assessment.tab_switch_count += 1
-
     current_answer = db.query(MCQAnswer).filter(
         MCQAnswer.assessment_id == assessment.id,
         MCQAnswer.question_index == assessment.current_question_index,
     ).first()
-    if current_answer is not None:
-        current_answer.tab_switch_count += 1
+
+    if body.event_type == "tab_switch":
+        assessment.tab_switch_count += 1
+        if current_answer is not None:
+            current_answer.tab_switch_count += 1
+    else:
+        assessment.fullscreen_exit_count += 1
+        if current_answer is not None:
+            current_answer.fullscreen_exit_count += 1
 
     db.commit()
-    return TabSwitchResponse(tab_switch_count=assessment.tab_switch_count)
+    return TabSwitchResponse(
+        tab_switch_count=assessment.tab_switch_count,
+        fullscreen_exit_count=assessment.fullscreen_exit_count,
+    )
