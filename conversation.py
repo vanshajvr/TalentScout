@@ -60,7 +60,7 @@ def get_bot_message(state: ConversationState) -> str:
         return "Please upload your resume/CV (PDF or DOCX) to continue."
     if step == "confirm_resume_data":
         return ""  # main.py already sent this via the /resume endpoint
-    if step == "interviewing":
+    if step == "mcq_assessment":
         return ""
     if step == "end":
         return (
@@ -92,7 +92,7 @@ def handle_user_input(state: ConversationState, user_input: str) -> StepResult:
         bot_messages.append(get_bot_message(state))
         return StepResult(state=state, bot_messages=bot_messages)
 
-    if seems_uncertain(user_input) and state.step not in "interviewing":
+    if seems_uncertain(user_input) and state.step != "mcq_assessment":
         bot_messages.append(
             "No worries — take your time. This is just an initial screening."
         )
@@ -127,7 +127,7 @@ def handle_user_input(state: ConversationState, user_input: str) -> StepResult:
             state.interview_index = 0
             state.current_question = ""
             state.qa_history = []
-            state.step = "interviewing"
+            state.step = "mcq_assessment"
             return StepResult(state=state, bot_messages=bot_messages)
         bot_messages.append(get_bot_message(state))
         return StepResult(state=state, bot_messages=bot_messages)
@@ -138,7 +138,7 @@ def handle_user_input(state: ConversationState, user_input: str) -> StepResult:
     )
         return StepResult(state=state, bot_messages=bot_messages)
 
-    elif step == "interviewing":
+    elif step == "mcq_assessment":
         if state.current_question:
             state.qa_history.append((state.current_question, user_input))
         state.interview_index += 1

@@ -28,6 +28,7 @@ class Candidate(Base):
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     resume_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     resume_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    resume_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     linkedin_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     github_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"))
@@ -149,3 +150,49 @@ class RecruiterSession(Base):
     started_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     ended_at: Mapped[datetime | None] = mapped_column(nullable=True)
     end_reason: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "logout" | "expired" | "invalidated"
+
+
+class MCQQuestion(Base):
+    __tablename__ = "mcq_questions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    technology: Mapped[str] = mapped_column(String(80))
+    difficulty_tier: Mapped[str] = mapped_column(String(20))  # fundamentals | applied | advanced
+    format: Mapped[str] = mapped_column(String(30))  # debugging_triage | architecture_tradeoff | spot_the_bug | systems_at_scale | decisional_judgment
+    question_text: Mapped[str] = mapped_column(Text)
+    options: Mapped[list] = mapped_column(JSON)  # [{"id": ..., "text": ...}, ...]
+    correct_option_id: Mapped[str] = mapped_column(String(10))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+
+class MCQAssessment(Base):
+    __tablename__ = "mcq_assessments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sessions.id"))
+    status: Mapped[str] = mapped_column(String(20), default="in_progress")  # in_progress | completed
+    current_question_index: Mapped[int] = mapped_column(default=0)
+    tab_switch_count: Mapped[int] = mapped_column(default=0)
+    started_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+
+class MCQAnswer(Base):
+    __tablename__ = "mcq_answers"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    assessment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("mcq_assessments.id"))
+    question_index: Mapped[int] = mapped_column()
+    question_type: Mapped[str] = mapped_column(String(20))  # technical | behavioral | open_text
+    pool_question_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("mcq_questions.id"), nullable=True)
+    question_text: Mapped[str] = mapped_column(Text)
+    options_snapshot: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    selected_option_id: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    text_response: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_correct: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    difficulty_tier: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    question_started_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    answered_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    time_taken_seconds: Mapped[int | None] = mapped_column(nullable=True)
+    tab_switch_count: Mapped[int] = mapped_column(default=0)

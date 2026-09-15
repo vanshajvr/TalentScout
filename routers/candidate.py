@@ -197,7 +197,7 @@ def _score_answer(question_text: str, answer_text: str, technology: str, experie
         
     
 def _post_process_turn(state, session_uuid, db, session_row, bot_messages):
-    if state.step == "interviewing" and not state.current_question:
+    if state.step == "mcq_assessment" and not state.current_question:
         question_text = _generate_next_question(state)
         state.current_question = question_text
         plan_item = state.interview_plan[state.interview_index]
@@ -253,7 +253,7 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
     session_row = get_session_or_404(db, session_uuid)
 
     db.add(Message(session_id=session_uuid, role="user", content=body.text, is_pasted=body.pasted))
-    prev_question = state.current_question if state.step == "interviewing" else None
+    prev_question = state.current_question if state.step == "mcq_assessment" else None
     was_ask_email_step = state.step == "ask_email"
     state_snapshot = copy.deepcopy(state)
 
@@ -344,6 +344,7 @@ def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession
 
     resume_text = _extract_resume_text(dest_path, ext)
     extracted = _extract_resume_fields(resume_text)
+    candidate_row.resume_text = resume_text
     state.pending_resume_data = extracted
     if not extracted:
         _log_event(db, session_uuid, "error", "Resume extraction returned empty result")
