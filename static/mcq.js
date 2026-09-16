@@ -131,15 +131,6 @@ function renderQuestion(data) {
   }
 }
 
-async function loadCurrentQuestion() {
-  const data = await apiCall(`/sessions/${sessionId}/mcq/current`);
-  if (data.completed) {
-    finishAssessment();
-    return;
-  }
-  renderQuestion(data);
-}
-
 async function submitAnswer() {
   nextBtn.disabled = true;
   const payload = {};
@@ -211,11 +202,17 @@ beginBtn.addEventListener("click", async () => {
     return;
   }
   beginBtn.disabled = true;
+  introError.style.display = "none";
   try {
     await document.documentElement.requestFullscreen().catch(() => {});
+    const data = await apiCall(`/sessions/${sessionId}/mcq/current`);
     startedAt = Date.now();
     showView(questionView);
-    await loadCurrentQuestion();
+    if (data.completed) {
+      finishAssessment();
+    } else {
+      renderQuestion(data);
+    }
   } catch (err) {
     introError.textContent = err.message;
     introError.style.display = "block";
