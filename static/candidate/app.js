@@ -158,7 +158,7 @@ function showResumeConfirmCard(extracted, sessionData) {
         });
         setInputEnabled(false); // stay in card-editing mode, not free text
       } else if (data.step === "mcq_assessment") {
-        window.location.href = `/static/mcq.html?session_id=${sessionId}`;
+        window.location.href = `/static/mcq/mcq.html?session_id=${sessionId}`;
       } else {
         setInputEnabled(true);
       }
