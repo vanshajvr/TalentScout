@@ -1,3 +1,4 @@
+import random
 import uuid
 from datetime import datetime
 
@@ -15,7 +16,7 @@ from utils.constants import (
     MCQ_TECHNICAL_TIME_LIMIT_SECONDS, MCQ_OPEN_TEXT_MAX_CHARS, MCQ_FORMATS, MCQ_DIFFICULTY_TIERS,
     BEHAVIORAL_QUESTION_TEMPLATES,
 )
-from routers.candidate import _difficulty_tier, _load_prompt, _mark_step
+from routers.candidate import _difficulty_tier, _load_prompt, _mark_step, _log_event
 from utils.llm_json import parse_llm_json
 from llm.groq_llm import GroqLLM
 
@@ -108,7 +109,67 @@ def _sample_technical_question(
     return None
 
 
-def _generate_behavioral_question(candidate, already_asked: list[str], dimension: str) -> dict:
+BEHAVIORAL_FALLBACK_QUESTIONS = {
+    "collaboration style (independent vs. team-oriented)": {
+        "question_text": "You're stuck on a tricky problem partway through a project. What's your first move?",
+        "options": [
+            {"id": "a", "text": "Keep working it out alone a while longer."},
+            {"id": "b", "text": "Ask a teammate immediately."},
+            {"id": "c", "text": "Post about it in a team channel and keep working in the meantime."},
+            {"id": "d", "text": "Schedule time with someone more experienced."},
+        ],
+    },
+    "risk tolerance under ambiguity": {
+        "question_text": "You need to ship something today, but you're not fully sure your fix covers every scenario. What do you do?",
+        "options": [
+            {"id": "a", "text": "Ship it and monitor closely afterward."},
+            {"id": "b", "text": "Keep testing, even if it means missing today's deadline."},
+            {"id": "c", "text": "Ship a smaller, safer partial fix instead."},
+            {"id": "d", "text": "Escalate and let someone else make the call."},
+        ],
+    },
+    "receptiveness to feedback": {
+        "question_text": "A teammate points out a flaw in an approach you already implemented. What's your instinct?",
+        "options": [
+            {"id": "a", "text": "Explain your reasoning first."},
+            {"id": "b", "text": "Thank them and start revising right away."},
+            {"id": "c", "text": "Ask clarifying questions before deciding anything."},
+            {"id": "d", "text": "Weigh it against your own judgment before acting."},
+        ],
+    },
+    "prioritization under time pressure": {
+        "question_text": "Two tasks land on your plate at once, both with the same deadline. How do you decide what's first?",
+        "options": [
+            {"id": "a", "text": "Whichever affects the most people."},
+            {"id": "b", "text": "Whichever is fastest to finish."},
+            {"id": "c", "text": "Whichever was requested first."},
+            {"id": "d", "text": "Whichever you're most confident doing well."},
+        ],
+    },
+    "sense of ownership and accountability": {
+        "question_text": "Something you built breaks in production after you've moved on to a new project. What do you do?",
+        "options": [
+            {"id": "a", "text": "Drop what you're doing and fix it yourself."},
+            {"id": "b", "text": "Hand it off — you've moved on."},
+            {"id": "c", "text": "Help troubleshoot but let someone else fix it."},
+            {"id": "d", "text": "Wait to be asked before getting involved."},
+        ],
+    },
+}
+
+
+def _valid_options_shape(options) -> bool:
+    if not isinstance(options, list) or len(options) != 4:
+        return False
+    ids = set()
+    for opt in options:
+        if not isinstance(opt, dict) or not opt.get("id") or not opt.get("text"):
+            return False
+        ids.add(opt["id"])
+    return len(ids) == 4  # ids must be unique, not just present
+
+
+def _generate_behavioral_question(db: SQLASession, session_uuid: uuid.UUID, candidate, already_asked: list[str], dimension: str) -> dict:
     prompt_template = _load_prompt("prompts/behavioral_mcq_prompt.txt")
     prompt = prompt_template.format(
         role=candidate.role or "the applied role",
@@ -121,24 +182,15 @@ def _generate_behavioral_question(candidate, already_asked: list[str], dimension
     try:
         raw = llm.generate(prompt, temperature=0.7).strip()
         parsed = parse_llm_json(raw)
-        if not parsed.get("question_text") or len(parsed.get("options", [])) != 4:
+        if not parsed.get("question_text") or not _valid_options_shape(parsed.get("options")):
             raise ValueError("malformed behavioral question response")
         return parsed
     except Exception as e:
-        print(f"Behavioral MCQ generation failed: {e}")
-        # Fall back to a generic, still-valid scenario rather than breaking the assessment.
-        return {
-            "question_text": (
-                f"You're partway through a task related to your work as {candidate.role or 'a candidate'} "
-                "when priorities shift unexpectedly. What's your instinct?"
-            ),
-            "options": [
-                {"id": "a", "text": "Finish what I started before switching focus."},
-                {"id": "b", "text": "Drop it immediately and address the new priority."},
-                {"id": "c", "text": "Check in with others before deciding how to proceed."},
-                {"id": "d", "text": "Quickly assess impact, then decide on my own."},
-            ],
-        }
+        _log_event(db, session_uuid, "llm_fallback", f"Behavioral MCQ generation failed for dimension '{dimension}': {e}")
+        # A per-dimension fallback, not one shared generic question — otherwise a
+        # sustained LLM outage would show the candidate the exact same question all
+        # 5 times in a row.
+        return BEHAVIORAL_FALLBACK_QUESTIONS[dimension]
 
 
 def _serve_question(db: SQLASession, assessment: MCQAssessment, candidate) -> MCQAnswer | None:
@@ -164,11 +216,20 @@ def _serve_question(db: SQLASession, assessment: MCQAssessment, candidate) -> MC
             last_two = db.query(MCQAnswer).filter(
                 MCQAnswer.assessment_id == assessment.id, MCQAnswer.question_type == "technical"
             ).order_by(MCQAnswer.question_index.desc()).limit(2).all()
-            last_two_correct: list[bool] = [bool(a.is_correct) for a in reversed(last_two)]
             prev_tier = (
                 last_two[0].difficulty_tier
                 if last_two and last_two[0].difficulty_tier else _starting_difficulty_tier(candidate)
             )
+            # Only count the pair as a genuine "2 in a row" signal if both were served at
+            # the SAME tier. Without this, a pair spanning a tier change (e.g. the answer
+            # that just triggered a bump, paired with the one before it) gets reused as
+            # evidence for a SECOND bump — so 3 correct answers in a row could bump the
+            # tier twice instead of once, since the middle answer gets "spent" in both
+            # the Q1+Q2 pair and the Q2+Q3 pair.
+            if len(last_two) == 2 and last_two[0].difficulty_tier == last_two[1].difficulty_tier:
+                last_two_correct: list[bool] = [bool(a.is_correct) for a in reversed(last_two)]
+            else:
+                last_two_correct = []
             difficulty_tier = _adjust_difficulty(prev_tier, last_two_correct)
 
         technology = _tech_for_index(candidate.tech_stack, index)
@@ -188,7 +249,13 @@ def _serve_question(db: SQLASession, assessment: MCQAssessment, candidate) -> MC
         answer = MCQAnswer(
             assessment_id=assessment.id, question_index=index, question_type="technical",
             pool_question_id=question.id, question_text=question.question_text,
-            options_snapshot=question.options, difficulty_tier=difficulty_tier,
+            # A fresh shuffled copy, never the pool's own list in place — mutating that
+            # directly would mark the pool question itself as modified, silently
+            # rewriting its stored option order on the next commit. Shuffling per
+            # serving (not per pool question) defeats any positional bias in where the
+            # LLM tends to place the correct answer.
+            options_snapshot=random.sample(question.options, k=len(question.options)),
+            difficulty_tier=difficulty_tier,
             question_started_at=now,
         )
 
@@ -200,7 +267,7 @@ def _serve_question(db: SQLASession, assessment: MCQAssessment, candidate) -> MC
                 MCQAnswer.assessment_id == assessment.id, MCQAnswer.question_type == "behavioral",
             ).order_by(MCQAnswer.question_index).all()
         ]
-        generated = _generate_behavioral_question(candidate, already_asked, dimension)
+        generated = _generate_behavioral_question(db, assessment.session_id, candidate, already_asked, dimension)
         answer = MCQAnswer(
             assessment_id=assessment.id, question_index=index, question_type="behavioral",
             pool_question_id=None, question_text=generated["question_text"],
