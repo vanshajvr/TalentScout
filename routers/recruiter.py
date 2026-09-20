@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session as SQLASession
 
 import db
 from db.database import get_db
-from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter, SessionLog, InviteToken, Organization
+from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter, SessionLog, InviteToken, Organization, MCQAssessment, MCQAnswer, MCQQuestion
 
 from utils.validators import is_valid_email
 from utils.auth import (
@@ -187,14 +187,72 @@ def candidate_questions(
     candidate_row = db.get(Candidate, cid)
     if candidate_row is None or candidate_row.org_id != recruiter.org_id:
         raise HTTPException(status_code=404, detail="Candidate not found")
-    session_row = db.query(SessionModel).filter(SessionModel.candidate_id == cid).first()
+
+    session_row = db.query(SessionModel).filter(SessionModel.candidate_id == cid).order_by(SessionModel.started_at.desc()).first()
     if session_row is None:
-        return []
-    questions = db.query(GeneratedQuestion).filter(GeneratedQuestion.session_id == session_row.id).all()
-    return [
-        {"technology": q.technology, "question_text": q.question_text, "answer_text": q.answer_text, "difficulty_tier": q.difficulty_tier}
-        for q in questions
-    ]
+        return {"assessment_type": "none", "legacy_questions": []}
+
+    assessment = db.query(MCQAssessment).filter(MCQAssessment.session_id == session_row.id).first()
+
+    if assessment is not None:
+        answers = db.query(MCQAnswer).filter(MCQAnswer.assessment_id == assessment.id).order_by(MCQAnswer.question_index).all()
+
+        technical_answers = [a for a in answers if a.question_type == "technical"]
+        technical_score = sum(1 for a in technical_answers if a.is_correct)
+        technical_total = len(technical_answers)
+        final_difficulty_tier = technical_answers[-1].difficulty_tier if technical_answers else None
+
+        duration_minutes = None
+        if assessment.completed_at is not None:
+            duration_minutes = round((assessment.completed_at - assessment.started_at).total_seconds() / 60)
+
+        # Correct-option lookup for technical questions, joined via pool_question_id.
+        pool_ids = [a.pool_question_id for a in technical_answers if a.pool_question_id is not None]
+        correct_by_pool_id = {
+            q.id: q.correct_option_id for q in db.query(MCQQuestion).filter(MCQQuestion.id.in_(pool_ids)).all()
+        } if pool_ids else {}
+
+        question_payloads = []
+        for a in answers:
+            payload = {
+                "question_index": a.question_index,
+                "question_type": a.question_type,
+                "question_text": a.question_text,
+                "options": a.options_snapshot,
+                "selected_option_id": a.selected_option_id,
+                "text_response": a.text_response,
+                "time_taken_seconds": a.time_taken_seconds,
+            }
+            if a.question_type == "technical":
+                payload["is_correct"] = a.is_correct
+                payload["difficulty_tier"] = a.difficulty_tier
+                payload["correct_option_id"] = correct_by_pool_id.get(a.pool_question_id) if a.pool_question_id else None
+            question_payloads.append(payload)
+
+        return {
+            "assessment_type": "mcq",
+            "mcq": {
+                "status": assessment.status,
+                "duration_minutes": duration_minutes,
+                "technical_score": technical_score,
+                "technical_total": technical_total,
+                "final_difficulty_tier": final_difficulty_tier,
+                "tab_switch_count": assessment.tab_switch_count,
+                "fullscreen_exit_count": assessment.fullscreen_exit_count,
+                "questions": question_payloads,
+            },
+        }
+
+    # No MCQ assessment for this candidate's session — fall back to the legacy
+    # conversational-flow question data.
+    legacy_questions = db.query(GeneratedQuestion).filter(GeneratedQuestion.session_id == session_row.id).all()
+    return {
+        "assessment_type": "legacy",
+        "legacy_questions": [
+            {"technology": q.technology, "question_text": q.question_text, "answer_text": q.answer_text, "difficulty_tier": q.difficulty_tier}
+            for q in legacy_questions
+        ],
+    }
 
 
 @router.get("/candidates/export")

@@ -147,14 +147,81 @@ async function loadCandidateQuestions(candidateId) {
   }
   responsesList.innerHTML = '<div class="empty-note">Loading…</div>';
   const res = await authedFetch(`${API}/recruiter/candidates/${candidateId}/questions`);
-  const questions = await res.json();
+  const data = await res.json();
 
+  if (data.assessment_type === "mcq") {
+    renderMcqResults(data.mcq);
+  } else {
+    renderLegacyQuestions(data.legacy_questions || []);
+  }
+}
+
+function renderMcqResults(mcq) {
+  responsesList.innerHTML = "";
+
+  const summary = document.createElement("div");
+  summary.className = "qa-summary";
+  const flagged = mcq.tab_switch_count > 0 || mcq.fullscreen_exit_count > 0;
+  summary.innerHTML = `
+    <div class="qa-summary-stat">
+      <div class="qa-summary-value">${mcq.technical_score} / ${mcq.technical_total}</div>
+      <div class="qa-summary-label">Technical score</div>
+    </div>
+    <div class="qa-summary-stat">
+      <div class="qa-summary-value">${escapeHtml(mcq.final_difficulty_tier || "—")}</div>
+      <div class="qa-summary-label">Final difficulty</div>
+    </div>
+    <div class="qa-summary-stat">
+      <div class="qa-summary-value">${mcq.duration_minutes != null ? mcq.duration_minutes + " min" : "In progress"}</div>
+      <div class="qa-summary-label">Duration</div>
+    </div>
+    <div class="qa-summary-stat">
+      <div class="qa-summary-value${flagged ? " flag-warn" : ""}">${mcq.tab_switch_count} / ${mcq.fullscreen_exit_count}</div>
+      <div class="qa-summary-label">Tab switches / FS exits</div>
+    </div>
+  `;
+  responsesList.appendChild(summary);
+
+  mcq.questions.forEach((q) => {
+    const div = document.createElement("div");
+    div.className = "qa-item";
+
+    let html = `<div class="qa-tech">${escapeHtml(q.question_type)}`;
+    if (q.difficulty_tier) html += ` · ${escapeHtml(q.difficulty_tier)}`;
+    if (q.question_type === "technical") {
+      html += `<span class="qa-badge ${q.is_correct ? "correct" : "incorrect"}">${q.is_correct ? "Correct" : "Incorrect"}</span>`;
+    }
+    html += `</div><div class="qa-question">${escapeHtml(q.question_text)}</div>`;
+
+    if (q.question_type === "open_text") {
+      html += `<div class="qa-answer">${escapeHtml(q.text_response) || "(no response recorded)"}</div>`;
+    } else if (q.options) {
+      q.options.forEach((opt) => {
+        let cls = "qa-option-row";
+        if (q.question_type === "technical") {
+          if (opt.id === q.correct_option_id) cls += " qa-correct-option";
+          else if (opt.id === q.selected_option_id) cls += " qa-selected-wrong";
+        } else if (opt.id === q.selected_option_id) {
+          cls += " qa-selected-neutral";
+        }
+        html += `<div class="${cls}">${escapeHtml(opt.text)}</div>`;
+      });
+    }
+    if (q.time_taken_seconds != null) {
+      html += `<div class="qa-answer" style="margin-top:6px;">Time taken: ${q.time_taken_seconds}s</div>`;
+    }
+
+    div.innerHTML = html;
+    responsesList.appendChild(div);
+  });
+}
+
+function renderLegacyQuestions(questions) {
+  responsesList.innerHTML = "";
   if (questions.length === 0) {
     responsesList.innerHTML = '<div class="empty-note">No interview responses yet for this candidate.</div>';
     return;
   }
-
-  responsesList.innerHTML = "";
   questions.forEach((q) => {
     const div = document.createElement("div");
     div.className = "qa-item";
