@@ -293,7 +293,7 @@ def delete_candidates(
             continue
         # Sessions, messages, generated questions, session logs, and any MCQ
         # assessment/answers all cascade-delete at the DB level (see
-        # migrate_cascade_deletes.py) — no need to hand-delete each table here anymore.
+        # migrations/migrate_cascade_deletes.py) — no need to hand-delete each table here anymore.
         if candidate_row.resume_path:
             try:
                 if os.path.exists(candidate_row.resume_path):

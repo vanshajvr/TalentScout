@@ -58,7 +58,7 @@ and a separate admin dashboard for team and org management.
 ├── conversation.py # Deterministic state-machine conversation logic
 ├── deps.py # Shared DB dependency helpers
 ├── create_tables.py # Fresh-schema creation script
-├── migrate_org.py # One-off migration: backfills org/RBAC schema
+├── migrations/ # One-off migration scripts (run as `python -m migrations.xyz`)
 ├── db/
 │ ├── database.py # SQLAlchemy session/engine setup
 │ └── models.py # Candidate, Session, Message, GeneratedQuestion,
@@ -166,9 +166,10 @@ To run against local Ollama instead of Groq, swap the import in
   unverified in this demo (an earlier version had OTP verification; it was
   removed after repeated deliverability issues on free-tier hosting, in
   favor of building out the org/RBAC and scoring features instead)
-- Schema migrations are hand-written one-off scripts (`migrate_org.py`),
-  not a migration framework, acceptable at this project's current size,
-  worth revisiting if schema changes become more frequent
+- Schema migrations are hand-written one-off scripts under `migrations/`
+  (run as `python -m migrations.<name>`), not a migration framework,
+  acceptable at this project's current size, worth revisiting if schema
+  changes become more frequent
 
 ---
 
@@ -211,4 +212,3 @@ rebuilt into a full-stack, multi-tenant application demonstrating:
 - Provider-agnostic LLM integration
 - A real, deployed product surface; candidate flow, recruiter dashboard,
   and admin dashboard — not just a chatbot demo
-
