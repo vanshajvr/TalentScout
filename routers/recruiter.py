@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Depends, Header, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session as SQLASession
 
@@ -377,3 +377,24 @@ def candidate_logs(
         return []
     logs = db.query(SessionLog).filter(SessionLog.session_id == session_row.id).order_by(SessionLog.timestamp).all()
     return [{"event_type": l.event_type, "detail": l.detail, "timestamp": l.timestamp.isoformat()} for l in logs]
+
+
+@router.get("/candidates/{candidate_id}/resume")
+def download_resume(
+    candidate_id: str, db: SQLASession = Depends(get_db),
+    recruiter: Recruiter = Depends(require_recruiter),
+):
+    try:
+        cid = uuid.UUID(candidate_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid candidate_id")
+    candidate_row = db.get(Candidate, cid)
+    if candidate_row is None or candidate_row.org_id != recruiter.org_id:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    if not candidate_row.resume_path or not os.path.exists(candidate_row.resume_path):
+        raise HTTPException(status_code=404, detail="No resume on file for this candidate")
+    return FileResponse(
+        candidate_row.resume_path,
+        filename=candidate_row.resume_filename or "resume",
+        media_type="application/octet-stream",
+    )
