@@ -137,6 +137,8 @@ function showResumeConfirmCard(extracted, sessionData) {
   chatEl.appendChild(div);
   chatEl.scrollTop = chatEl.scrollHeight;
 
+  let replaceDuplicate = false;
+
   document.getElementById("confirm-resume-btn").addEventListener("click", async () => {
     const confirmBtn = document.getElementById("confirm-resume-btn");
     const fields = ["edit-email", "edit-phone", "edit-location", "edit-experience",
@@ -153,6 +155,7 @@ function showResumeConfirmCard(extracted, sessionData) {
 
     const payload = {
       email: document.getElementById("edit-email").value.trim() || null,
+      replace_duplicate: replaceDuplicate,
       phone: document.getElementById("edit-phone").value.trim() || null,
       location: document.getElementById("edit-location").value.trim() || null,
       experience: document.getElementById("edit-experience").value.trim() || null,
@@ -162,6 +165,7 @@ function showResumeConfirmCard(extracted, sessionData) {
       linkedin: document.getElementById("edit-linkedin").value.trim() || null,
       github: document.getElementById("edit-github").value.trim() || null,
     };
+    replaceDuplicate = false; // one-shot — only applies to this specific submission
 
     try {
       const res = await fetch(`${API}/sessions/${sessionId}/resume/confirm`, {
@@ -184,6 +188,32 @@ function showResumeConfirmCard(extracted, sessionData) {
           if (el) el.disabled = false;
         });
         setInputEnabled(false); // stay in card-editing mode, not free text
+
+        if (data.duplicate_email_choice) {
+          const choiceDiv = document.createElement("div");
+          choiceDiv.className = "bubble bot";
+
+          const replaceBtn = document.createElement("button");
+          replaceBtn.textContent = "Delete old attempt & continue with this email";
+          replaceBtn.style.marginRight = "8px";
+          replaceBtn.addEventListener("click", () => {
+            choiceDiv.remove();
+            replaceDuplicate = true;
+            confirmBtn.click();
+          });
+
+          const editBtn = document.createElement("button");
+          editBtn.textContent = "Use a different email instead";
+          editBtn.addEventListener("click", () => {
+            choiceDiv.remove();
+            document.getElementById("edit-email").focus();
+          });
+
+          choiceDiv.appendChild(replaceBtn);
+          choiceDiv.appendChild(editBtn);
+          chatEl.appendChild(choiceDiv);
+          chatEl.scrollTop = chatEl.scrollHeight;
+        }
       } else if (data.step === "mcq_assessment") {
         window.location.href = `/static/mcq/mcq.html?session_id=${sessionId}`;
       } else {

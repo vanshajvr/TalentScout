@@ -1,400 +1,522 @@
-import csv
-import io
-import os
 import uuid
-from datetime import datetime, timedelta
+import copy
+import os
+from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Depends, Header, Request
-from fastapi.responses import StreamingResponse, FileResponse
-from pydantic import BaseModel, Field, field_validator
+import pdfplumber
+from docx import Document as DocxDocument
+import json
+
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Request
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session as SQLASession
 
-import db
 from db.database import get_db
-from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter, SessionLog, InviteToken, Organization, MCQAssessment, MCQAnswer, MCQQuestion, RecruiterSession
+from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, SessionLog, Organization
+from conversation import ConversationState, handle_user_input, get_bot_message
+from llm.groq_llm import GroqLLM
+from utils.constants import BEHAVIORAL_QUESTION_TEMPLATES, MCQ_SEEDED_TECHNOLOGIES
+from utils.validators import is_valid_email, is_valid_phone, is_valid_experience
+from utils.rate_limit import check_rate_limit
+from deps import get_candidate_or_404, get_session_or_404
 
-from utils.validators import is_valid_email
-from utils.auth import (
-    hash_password, verify_password, issue_token, require_recruiter, _resolve_token,
-    record_failed_login, logout as auth_logout,
-)
+router = APIRouter()
 
-from utils.schemas import AuthResponse
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-router = APIRouter(prefix="/recruiter")
+MAX_RESUME_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB — generous for a resume, rejects egregious uploads
+MAX_RESUME_PDF_PAGES = 20  # any real resume is 1-3 pages; a page cap bounds extraction cost/time
 
-class SignupRequest(BaseModel):
-    name: str
-    email: str
-    password: str = Field(min_length=8)
-    invite_code: str
+RESUME_FILE_SIGNATURES = {
+    ".pdf": b"%PDF-",
+    ".docx": b"PK\x03\x04",  # docx is a zip archive under the hood
+}
 
-    @field_validator("email")
-    @classmethod
-    def normalize_email(cls, v: str) -> str:
-        return v.strip().lower()
+llm = GroqLLM()
+ACTIVE_SESSIONS: dict[str, ConversationState] = {}
+
+class StartSessionResponse(BaseModel):
+    session_id: str
+    message: str
 
 
-class LoginRequest(BaseModel):
-    email: str
-    password: str
+class MessageRequest(BaseModel):
+    text: str
+    pasted: bool = False
 
-    @field_validator("email")
-    @classmethod
-    def normalize_email(cls, v: str) -> str:
-        return v.strip().lower()
 
-class DeleteCandidatesRequest(BaseModel):
-    candidate_ids: list[str]
+class MessageResponse(BaseModel):
+    messages: list[str]
+    step: str
+    candidate: dict
+    extracted: dict | None = None
+    duplicate_email_choice: bool = False  # True when confirm_resume_data found an
+                                            # abandoned prior attempt under this email
+                                            # and is waiting on the candidate to choose
+                                            # rather than treating it as a hard block
 
-@router.get("/org")
-def get_my_org(db: SQLASession = Depends(get_db), recruiter: Recruiter = Depends(require_recruiter)):
-    org = db.get(Organization, recruiter.org_id)
-    if org is None:
-        raise HTTPException(status_code=404, detail="Organization not found")
-    return {"org_name": org.name, "org_slug": org.slug}
+class ConfirmResumeRequest(BaseModel):
+    email: str | None = Field(default=None, max_length=255)
+    replace_duplicate: bool = False  # candidate's answer to the duplicate_email_choice prompt
+    phone: str | None = Field(default=None, max_length=20)
+    location: str | None = Field(default=None, max_length=120)
+    experience: str | None = Field(default=None, max_length=20)
+    role: str | None = Field(default=None, max_length=120)
+    tech_stack: list[str] | None = Field(default=None, max_length=50)
+    education: str | None = Field(default=None, max_length=255)
+    linkedin: str | None = Field(default=None, max_length=255)
+    github: str | None = Field(default=None, max_length=255)
 
-@router.post("/signup", response_model=AuthResponse)
-def recruiter_signup(body: SignupRequest, request: Request, db: SQLASession = Depends(get_db)):
-    ip = request.client.host if request.client else None
-    user_agent = request.headers.get("user-agent")
+def _extract_resume_text(file_path: str, ext: str) -> str:
+    if ext == ".pdf":
+        text_parts = []
+        with pdfplumber.open(file_path) as pdf:
+            for page in pdf.pages[:MAX_RESUME_PDF_PAGES]:
+                page_text = page.extract_text()
+                if page_text:
+                    text_parts.append(page_text)
+                for link in getattr(page, "hyperlinks", []):
+                    uri = link.get("uri", "")
+                    if uri:
+                        text_parts.append(f"[link: {uri}]")
+        return "\n".join(text_parts)
+    elif ext == ".docx":
+        doc = DocxDocument(file_path)
+        return "\n".join(p.text for p in doc.paragraphs)
+    return ""
 
-    token_row = db.query(InviteToken).filter(InviteToken.code == body.invite_code).with_for_update().first()
-    if token_row is None:
-        raise HTTPException(status_code=403, detail="Invalid invite code")
-    if token_row.used_at is not None:
-        raise HTTPException(status_code=403, detail="This invite code has already been used")
-    if token_row.revoked_at is not None:
-        raise HTTPException(status_code=403, detail="This invite code has been revoked")
-    if token_row.expires_at is not None and datetime.utcnow() > token_row.expires_at:
-        raise HTTPException(status_code=403, detail="This invite code has expired")
-
-    if not is_valid_email(body.email):
-        raise HTTPException(status_code=400, detail="Please enter a valid email address")
-
-    existing = db.query(Recruiter).filter(Recruiter.email == body.email).first()
-    if existing is not None:
-        raise HTTPException(status_code=400, detail="An account with this email already exists")
-    
-
-    password_hash = hash_password(body.password)
-    recruiter = Recruiter(
-        name=body.name, email=body.email, password_hash=password_hash,
-        org_id=token_row.org_id, role="recruiter",
+def _extract_resume_fields(resume_text: str) -> dict:
+    if not resume_text.strip():
+        return {}
+    prompt_template = _load_prompt("prompts/resume_extraction_prompt.txt")
+    prompt = prompt_template.format(
+        resume_text=resume_text[:6000],
+        canonical_technologies=", ".join(MCQ_SEEDED_TECHNOLOGIES),
     )
-    db.add(recruiter)
-    db.flush()  # assigns recruiter.id without committing — the row lock on token_row
-                # must survive until both the recruiter row and the token's used_* fields
-                # are written together, or a second concurrent request could still slip
-                # through between two separate commits.
-
-    token_row.used_by = recruiter.id
-    token_row.used_by_name = recruiter.name
-    token_row.used_ip = ip
-    token_row.used_user_agent = user_agent
-    token_row.used_at = datetime.utcnow()
-    db.commit()
-    db.refresh(recruiter)
-
-    token = issue_token(recruiter, db, ip=ip, user_agent=user_agent)
-    return AuthResponse(token=token, name=recruiter.name)
-
-LOGIN_LOCKOUT_THRESHOLD = 5
-LOGIN_LOCKOUT_WINDOW_MINUTES = 15
-
-
-@router.post("/login", response_model=AuthResponse)
-def recruiter_login(body: LoginRequest, request: Request, db: SQLASession = Depends(get_db)):
-    ip = request.client.host if request.client else None
-    user_agent = request.headers.get("user-agent")
-
-    window_start = datetime.utcnow() - timedelta(minutes=LOGIN_LOCKOUT_WINDOW_MINUTES)
-    recent_failures = db.query(RecruiterSession).filter(
-        RecruiterSession.email_attempted == body.email,
-        RecruiterSession.success.is_(False),
-        RecruiterSession.started_at >= window_start,
-    ).count()
-    if recent_failures >= LOGIN_LOCKOUT_THRESHOLD:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Too many failed login attempts. Please try again in {LOGIN_LOCKOUT_WINDOW_MINUTES} minutes.",
-        )
-
-    recruiter = db.query(Recruiter).filter(Recruiter.email == body.email).first()
-    if recruiter is None:
-        record_failed_login(db, body.email, ip, user_agent, recruiter=None)
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
-
-    is_valid, upgraded_hash = verify_password(body.password, recruiter.password_hash, recruiter.password_salt)
-    if not is_valid:
-        record_failed_login(db, body.email, ip, user_agent, recruiter=recruiter)
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
-
-    if upgraded_hash is not None:
-        # A legacy PBKDF2 account just verified correctly — migrate it to argon2 now,
-        # since we have the real password in hand and will never get another chance
-        # to do this without asking the user to reset it.
-        recruiter.password_hash = upgraded_hash
-        recruiter.password_salt = None
-        db.commit()
-
-    token = issue_token(recruiter, db, ip=ip, user_agent=user_agent)
-    return AuthResponse(token=token, name=recruiter.name)
-
-
-@router.post("/logout")
-def recruiter_logout(authorization: str = Header(None), db: SQLASession = Depends(get_db)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    token = authorization.removeprefix("Bearer ")
-    auth_logout(db, token)
-    return {"logged_out": True}
-
-
-@router.get("/me")
-def get_me(authorization: str = Header(None), db: SQLASession = Depends(get_db)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    token = authorization.removeprefix("Bearer ")
-    recruiter_id = _resolve_token(token, db)
-    recruiter = db.get(Recruiter, uuid.UUID(recruiter_id))
-    if recruiter is None:
-        raise HTTPException(status_code=401, detail="Account not found")
-    return {"name": recruiter.name, "email": recruiter.email, "role": recruiter.role}
-
-def _candidate_query(db, org_id, role, tech, min_experience, status):
-    q = db.query(Candidate, SessionModel).join(SessionModel, SessionModel.candidate_id == Candidate.id)
-    q = q.filter(Candidate.org_id == org_id)
-    if role:
-        q = q.filter(Candidate.role.ilike(f"%{role}%"))
-    if min_experience is not None:
-        q = q.filter(Candidate.experience >= min_experience)
-    if status:
-        q = q.filter(SessionModel.status == status)
-    results = q.all()
-    if tech:
-        results = [(c, s) for c, s in results if c.tech_stack and any(tech.lower() in t.lower() for t in c.tech_stack)]
-    return results
-
-
-@router.get("/candidates")
-def list_candidates(
-    role: str | None = None, tech: str | None = None,
-    min_experience: float | None = None, status: str | None = None,
-    db: SQLASession = Depends(get_db),
-    recruiter: Recruiter = Depends(require_recruiter),
-):
-    rows = _candidate_query(db, recruiter.org_id, role, tech, min_experience, status)
-    return [
-        {
-            "id": str(c.id), "session_id": str(s.id), "name": c.name, "email": c.email,
-            "phone": c.phone, "location": c.location, "experience": c.experience, "role": c.role,
-            "tech_stack": c.tech_stack, "resume_filename": c.resume_filename,
-            "status": s.status, "current_step": s.current_step,
-            "created_at": c.created_at.isoformat() if c.created_at else None,
-        }
-        for c, s in rows
-    ]
-
-
-@router.get("/overview")
-def overview(db: SQLASession = Depends(get_db), recruiter: Recruiter = Depends(require_recruiter)):
-    total = db.query(Candidate).filter(Candidate.org_id == recruiter.org_id).count()
-    in_progress = (
-        db.query(SessionModel).join(Candidate)
-        .filter(Candidate.org_id == recruiter.org_id, SessionModel.status == "in_progress").count()
-    )
-    completed = (
-        db.query(SessionModel).join(Candidate)
-        .filter(Candidate.org_id == recruiter.org_id, SessionModel.status == "completed").count()
-    )
-    experiences = [
-    c.experience for c in db.query(Candidate)
-    .filter(Candidate.org_id == recruiter.org_id, Candidate.experience.isnot(None)).all()
-    if c.experience is not None
-    ]   
-    avg_experience = round(sum(experiences) / len(experiences), 1) if experiences else None
-    return {"total_candidates": total, "in_progress": in_progress, "completed": completed, "avg_experience": avg_experience}
-
-
-@router.get("/candidates/{candidate_id}/questions")
-def candidate_questions(
-    candidate_id: str, db: SQLASession = Depends(get_db),
-    recruiter: Recruiter = Depends(require_recruiter),
-):
     try:
-        cid = uuid.UUID(candidate_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid candidate_id")
-    candidate_row = db.get(Candidate, cid)
-    if candidate_row is None or candidate_row.org_id != recruiter.org_id:
-        raise HTTPException(status_code=404, detail="Candidate not found")
+        raw = llm.generate(prompt, temperature=0).strip()
+        if raw.startswith("```"):
+            raw = raw.strip("`").replace("json", "", 1).strip()
+        return json.loads(raw)
+    except Exception as e:
+        print(f"Resume extraction failed: {e}")
+        return {}
+    
+def _load_prompt(path: str) -> str:
+    with open(path, "r") as f:
+        return f.read()
 
-    session_row = db.query(SessionModel).filter(SessionModel.candidate_id == cid).order_by(SessionModel.started_at.desc()).first()
-    if session_row is None:
-        return {"assessment_type": "none", "legacy_questions": []}
 
-    assessment = db.query(MCQAssessment).filter(MCQAssessment.session_id == session_row.id).first()
+_SYSTEM_PROMPT = _load_prompt("prompts/system_prompt.txt")
 
-    if assessment is not None:
-        answers = db.query(MCQAnswer).filter(MCQAnswer.assessment_id == assessment.id).order_by(MCQAnswer.question_index).all()
 
-        technical_answers = [a for a in answers if a.question_type == "technical"]
-        technical_score = sum(1 for a in technical_answers if a.is_correct)
-        technical_total = len(technical_answers)
-        final_difficulty_tier = technical_answers[-1].difficulty_tier if technical_answers else None
+def _sync_candidate_row(db: SQLASession, candidate_id: uuid.UUID, state: ConversationState) -> None:
+    row = get_candidate_or_404(db, candidate_id)
+    c = state.candidate
+    row.name = c.name or None
+    row.email = c.email or None
+    row.education = c.education or None
+    row.phone = c.phone or None
+    row.location = c.location or None
+    if c.experience and is_valid_experience(c.experience):
+        row.experience = float(c.experience.replace("+", ""))
+    else:
+        row.experience = None
+    row.role = c.role or None
+    row.tech_stack = c.tech_stack or None
+    row.linkedin_url = c.linkedin or None
+    row.github_url = c.github or None
+    db.commit()
 
-        duration_minutes = None
-        if assessment.completed_at is not None:
-            duration_minutes = round((assessment.completed_at - assessment.started_at).total_seconds() / 60)
 
-        # Correct-option lookup for technical questions, joined via pool_question_id.
-        pool_ids = [a.pool_question_id for a in technical_answers if a.pool_question_id is not None]
-        correct_by_pool_id = {
-            q.id: q.correct_option_id for q in db.query(MCQQuestion).filter(MCQQuestion.id.in_(pool_ids)).all()
-        } if pool_ids else {}
+def _difficulty_tier(experience) -> str:
+    if experience is None:
+        return "unknown"
+    try:
+        # experience can arrive as a string (e.g. "3+", from in-memory extraction data)
+        # or as a genuine float (e.g. from the Candidate.experience DB column) — handle both.
+        val = float(experience.replace("+", "")) if isinstance(experience, str) else float(experience)
+    except (ValueError, TypeError):
+        return "unknown"
+    if val < 1:
+        return "fundamentals"
+    if val <= 3:
+        return "applied"
+    return "advanced"
 
-        question_payloads = []
-        for a in answers:
-            payload = {
-                "question_index": a.question_index,
-                "question_type": a.question_type,
-                "question_text": a.question_text,
-                "options": a.options_snapshot,
-                "selected_option_id": a.selected_option_id,
-                "text_response": a.text_response,
-                "time_taken_seconds": a.time_taken_seconds,
-            }
-            if a.question_type == "technical":
-                payload["is_correct"] = a.is_correct
-                payload["difficulty_tier"] = a.difficulty_tier
-                payload["correct_option_id"] = correct_by_pool_id.get(a.pool_question_id) if a.pool_question_id else None
-            question_payloads.append(payload)
+def _log_event(db: SQLASession, session_uuid: uuid.UUID, event_type: str, detail: str):
+    db.add(SessionLog(session_id=session_uuid, event_type=event_type, detail=detail))
+    db.commit()
 
+def _mark_step(db: SQLASession, session_uuid: uuid.UUID, session_row: SessionModel, new_step: str):
+    """Advances session_row.current_step, logging the transition, and — if the new step
+    is the final one — marks the session completed. Previously current_step/status were
+    updated inline at each of the three call sites with no completion tracking at all,
+    so status stayed "in_progress" forever and completed_at was never set."""
+    if session_row.current_step != new_step:
+        _log_event(db, session_uuid, "step_transition", f"{session_row.current_step} -> {new_step}")
+    session_row.current_step = new_step
+    if new_step == "end" and session_row.status != "completed":
+        session_row.status = "completed"
+        session_row.completed_at = datetime.utcnow()
+    db.commit()
+
+def _format_history(qa_history: list[tuple[str, str]]) -> str:
+    if not qa_history:
+        return "(none yet)"
+    return "\n\n".join(f"Q: {q}\nA: {a}" for q, a in qa_history)
+
+
+def _generate_next_question(state: ConversationState) -> str:
+    if state.interview_index >= len(state.interview_plan):
+        return "Thank you — that's all the questions I have for now."
+    plan_item = state.interview_plan[state.interview_index]
+    role = state.candidate.role
+
+    if plan_item == "behavioral_role":
+        return BEHAVIORAL_QUESTION_TEMPLATES[0].format(role=role)
+    if plan_item == "behavioral_stream":
+        return BEHAVIORAL_QUESTION_TEMPLATES[1].format(role=role, role_lower=role.lower())
+
+    prompt_template = _load_prompt("prompts/next_question_prompt.txt")
+    prompt = prompt_template.format(
+        role=role,
+        experience=state.candidate.experience,
+        technology=plan_item,
+        qa_history=_format_history(state.qa_history),
+    )
+    try:
+        return llm.generate(prompt, system=_SYSTEM_PROMPT).strip()
+    except Exception as e:
+        print(f"LLM generation failed: {e}")
+        return (
+            f"(We're having trouble generating a tailored question right now — "
+            f"tell me about your experience with {plan_item}.)"
+        )
+    
+def _score_answer(question_text: str, answer_text: str, technology: str, experience: str) -> dict:
+    prompt_template = _load_prompt("prompts/answer_scoring_prompt.txt")
+    prompt = prompt_template.format(
+        question_text=question_text,
+        answer_text=answer_text,
+        technology=technology,
+        experience=experience,
+    )
+    try:
+        raw = llm.generate(prompt, temperature=0).strip()
+        if raw.startswith("```"):
+            raw = raw.strip("`").replace("json", "", 1).strip()
+        result = json.loads(raw)
         return {
-            "assessment_type": "mcq",
-            "mcq": {
-                "status": assessment.status,
-                "duration_minutes": duration_minutes,
-                "technical_score": technical_score,
-                "technical_total": technical_total,
-                "final_difficulty_tier": final_difficulty_tier,
-                "tab_switch_count": assessment.tab_switch_count,
-                "fullscreen_exit_count": assessment.fullscreen_exit_count,
-                "questions": question_payloads,
-            },
+            "correctness": int(result["correctness"]),
+            "reasoning": int(result["reasoning"]),
+            "communication": int(result["communication"]),
+            "justification": result.get("justification"),
         }
+    
+    except Exception as e:
+        print(f"Answer scoring failed: {e}")
+        return {"correctness": None, "reasoning": None, "communication": None, "justification": None}
+        
+    
+def _post_process_turn(state, session_uuid, db, session_row, bot_messages):
+    if state.step == "mcq_assessment" and not state.current_question:
+        question_text = _generate_next_question(state)
+        state.current_question = question_text
+        plan_item = state.interview_plan[state.interview_index]
+        db.add(GeneratedQuestion(
+            session_id=session_uuid,
+            technology=plan_item,
+            question_text=question_text,
+            difficulty_tier=_difficulty_tier(state.candidate.experience),
+            answer_text=None,
+        ))
+        db.add(Message(session_id=session_uuid, role="assistant", content=question_text))
+        db.commit()
+        bot_messages.append(question_text)
+    return state, bot_messages
 
-    # No MCQ assessment for this candidate's session — fall back to the legacy
-    # conversational-flow question data.
-    legacy_questions = db.query(GeneratedQuestion).filter(GeneratedQuestion.session_id == session_row.id).all()
-    return {
-        "assessment_type": "legacy",
-        "legacy_questions": [
-            {"technology": q.technology, "question_text": q.question_text, "answer_text": q.answer_text, "difficulty_tier": q.difficulty_tier}
-            for q in legacy_questions
-        ],
+
+@router.post("/sessions", response_model=StartSessionResponse)
+def start_session(request: Request, org: str = "default", db: SQLASession = Depends(get_db)):
+    ip = request.client.host if request.client else None
+    check_rate_limit(f"start_session:{ip or 'unknown'}", max_requests=10, window_minutes=60)
+
+    org_row = db.query(Organization).filter(Organization.slug == org).first()
+    if org_row is None:
+        raise HTTPException(status_code=404, detail="Unknown organization")
+
+    candidate_row = Candidate(org_id=org_row.id)
+    db.add(candidate_row)
+    db.flush()
+
+    session_row = SessionModel(candidate_id=candidate_row.id, current_step="greeting")
+    db.add(session_row)
+    db.commit()
+    db.refresh(session_row)
+
+    state = ConversationState()
+    session_id = str(session_row.id)
+    ACTIVE_SESSIONS[session_id] = state
+
+    greeting = get_bot_message(state)
+    db.add(Message(session_id=session_row.id, role="assistant", content=greeting))
+    db.commit()
+
+    return StartSessionResponse(session_id=session_id, message=greeting)
+
+@router.post("/sessions/{session_id}/messages", response_model=MessageResponse)
+def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depends(get_db)):
+    state = ACTIVE_SESSIONS.get(session_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+
+    try:
+        session_uuid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+
+    session_row = get_session_or_404(db, session_uuid)
+
+    db.add(Message(session_id=session_uuid, role="user", content=body.text, is_pasted=body.pasted))
+    prev_question = state.current_question if state.step == "mcq_assessment" else None
+    was_ask_email_step = state.step == "ask_email"
+    state_snapshot = copy.deepcopy(state)
+
+    result = handle_user_input(state, body.text)
+    state = result.state
+
+    if was_ask_email_step and state.candidate.email:
+        candidate_row = get_candidate_or_404(db, session_row.candidate_id)
+        duplicate = (
+            db.query(Candidate)
+            .filter(
+                Candidate.org_id == candidate_row.org_id,
+                Candidate.email == state.candidate.email,
+                Candidate.id != session_row.candidate_id,
+            )
+            .first()
+        )        
+        if duplicate is not None:
+            state = state_snapshot
+            ACTIVE_SESSIONS[session_id] = state
+            msg = "That email is already registered with another screening. Please use a different email address."
+            db.add(Message(session_id=session_uuid, role="assistant", content=msg))
+            db.commit()
+            return MessageResponse(messages=[msg], step=state.step, candidate=vars(state.candidate))
+
+    ACTIVE_SESSIONS[session_id] = state
+
+    for msg in result.bot_messages:
+        db.add(Message(session_id=session_uuid, role="assistant", content=msg))
+
+    _mark_step(db, session_uuid, session_row, state.step)
+
+    _sync_candidate_row(db, session_row.candidate_id, state)
+
+    if prev_question:
+        q_row = (
+            db.query(GeneratedQuestion)
+            .filter_by(session_id=session_uuid, question_text=prev_question)
+            .first()
+        )
+        if q_row is not None:
+            q_row.answer_text = body.text
+            score = _score_answer(q_row.question_text, body.text, q_row.technology, state.candidate.experience)
+            q_row.correctness_score = score["correctness"]
+            q_row.reasoning_score = score["reasoning"]
+            q_row.communication_score = score["communication"]
+            q_row.score_justification = score["justification"]
+            db.commit()
+
+    bot_messages = list(result.bot_messages)
+    state, bot_messages = _post_process_turn(state, session_uuid, db, session_row, bot_messages)
+    ACTIVE_SESSIONS[session_id] = state
+
+    return MessageResponse(
+        messages=bot_messages,
+        step=state.step,
+        candidate=vars(state.candidate),
+    )
+
+@router.post("/sessions/{session_id}/resume")
+def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession = Depends(get_db)):
+    state = ACTIVE_SESSIONS.get(session_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    if state.step != "upload_resume":
+        raise HTTPException(status_code=400, detail="Not expecting a resume upload right now")
+
+    try:
+        session_uuid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+
+    allowed = {".pdf", ".docx"}
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in allowed:
+        raise HTTPException(status_code=400, detail="Only PDF or DOCX files are accepted")
+
+    content = file.file.read(MAX_RESUME_SIZE_BYTES + 1)
+    if len(content) > MAX_RESUME_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail="Resume file is too large (10 MB max)")
+
+    expected_signature = RESUME_FILE_SIGNATURES[ext]
+    if not content.startswith(expected_signature):
+        raise HTTPException(status_code=400, detail="File content doesn't match its extension")
+
+    safe_name = f"{session_id}{ext}"
+    dest_path = os.path.join(UPLOAD_DIR, safe_name)
+    with open(dest_path, "wb") as f:
+        f.write(content)
+
+    session_row = get_session_or_404(db, session_uuid)
+    candidate_row = get_candidate_or_404(db, session_row.candidate_id)
+    candidate_row.resume_filename = file.filename
+    candidate_row.resume_path = dest_path
+    db.commit()
+
+    resume_text = _extract_resume_text(dest_path, ext)
+    extracted = _extract_resume_fields(resume_text)
+    candidate_row.resume_text = resume_text
+    state.pending_resume_data = extracted
+    if not extracted:
+        _log_event(db, session_uuid, "error", "Resume extraction returned empty result")
+
+    state.step = "confirm_resume_data"
+    ACTIVE_SESSIONS[session_id] = state
+
+    summary_lines = []
+    if extracted.get("email") is not None: summary_lines.append(f"Email: {extracted['email']}")
+    if extracted.get("phone") is not None: summary_lines.append(f"Phone: {extracted['phone']}")
+    if extracted.get("location") is not None: summary_lines.append(f"Location: {extracted['location']}")
+    if extracted.get("experience") is not None: summary_lines.append(f"Experience: {extracted['experience']} years")
+    if extracted.get("role") is not None: summary_lines.append(f"Role: {extracted['role']}")
+    if extracted.get("tech_stack"): summary_lines.append(f"Tech stack: {', '.join(extracted['tech_stack'])}")
+    if extracted.get("education"): summary_lines.append(f"Education: {extracted['education']}")
+    if extracted.get("linkedin"): summary_lines.append(f"LinkedIn: {extracted['linkedin']}")
+    if extracted.get("github"): summary_lines.append(f"GitHub: {extracted['github']}")
+
+    if summary_lines:
+        bot_reply = (
+            "Here's what I found on your resume:\n\n" + "\n".join(summary_lines) +
+            "\n\nEdit anything below, then confirm."
+        )
+    else:
+        bot_reply = "I couldn't extract much from that resume — please fill in your details below."
+
+    db.add(Message(session_id=session_uuid, role="user", content=f"[uploaded resume: {file.filename}]"))
+    db.add(Message(session_id=session_uuid, role="assistant", content=bot_reply))
+    _mark_step(db, session_uuid, session_row, state.step)
+
+    return MessageResponse(
+            messages=[bot_reply], step=state.step, candidate=vars(state.candidate), extracted=extracted,
+        )
+@router.post("/sessions/{session_id}/resume/confirm", response_model=MessageResponse)
+def confirm_resume_data(session_id: str, body: ConfirmResumeRequest, db: SQLASession = Depends(get_db)):
+    state = ACTIVE_SESSIONS.get(session_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="Session not found or expired")
+    if state.step not in ("confirm_resume_data",):
+        raise HTTPException(status_code=400, detail="Not expecting resume confirmation right now")
+
+    try:
+        session_uuid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+
+    session_row = get_session_or_404(db, session_uuid)
+
+    state.pending_resume_data = {
+        "email": body.email or None,
+        "phone": body.phone or None,
+        "location": body.location or None,
+        "experience": body.experience or None,
+        "role": body.role or None,
+        "tech_stack": body.tech_stack or [],
+        "education": body.education or None,
+        "linkedin": body.linkedin or None,
+        "github": body.github or None,
     }
 
+    # catch duplicate email BEFORE it ever reaches the database
+    if body.email:
+        candidate_row = get_candidate_or_404(db, session_row.candidate_id)
+        duplicate = (
+            db.query(Candidate)
+            .filter(
+                Candidate.org_id == candidate_row.org_id,
+                Candidate.email == body.email,
+                Candidate.id != session_row.candidate_id,
+            )
+            .first()
+        )
+        if duplicate is not None:
+            duplicate_session = db.query(SessionModel).filter(SessionModel.candidate_id == duplicate.id).first()
+            duplicate_completed = duplicate_session is not None and duplicate_session.status == "completed"
 
-def _csv_safe(value) -> str:
-    """Neutralizes CSV formula injection: a cell value starting with =, +, -, or @
-    gets interpreted as a formula by Excel/Google Sheets when the export is opened.
-    Every field here traces back to a candidate-supplied resume, so all of it is
-    attacker-controlled. Prefixing with a single quote forces literal-text display."""
-    text = str(value) if value is not None else ""
-    if text and text[0] in ("=", "+", "-", "@"):
-        return "'" + text
-    return text
+            if duplicate_completed:
+                # A genuinely finished screening already exists under this email —
+                # no choice to offer, this is a real duplicate.
+                msg = "That email is already registered with another screening. Please edit the email field and try again."
+                db.add(Message(session_id=session_uuid, role="assistant", content=msg))
+                db.commit()
+                return MessageResponse(
+                    messages=[msg], step=state.step, candidate=vars(state.candidate), extracted=state.pending_resume_data
+                )
 
+            if not body.replace_duplicate:
+                # An earlier attempt under this email exists but never completed —
+                # let the candidate decide rather than silently blocking or silently
+                # deleting someone else's (or their own) abandoned attempt.
+                msg = (
+                    "There's an earlier, unfinished screening under this email. "
+                    "You can use a different email, or delete that old attempt and continue here with this one."
+                )
+                db.add(Message(session_id=session_uuid, role="assistant", content=msg))
+                db.commit()
+                return MessageResponse(
+                    messages=[msg], step=state.step, candidate=vars(state.candidate),
+                    extracted=state.pending_resume_data, duplicate_email_choice=True,
+                )
 
-@router.get("/candidates/export")
-def export_candidates(
-    role: str | None = None, tech: str | None = None,
-    min_experience: float | None = None, status: str | None = None,
-    db: SQLASession = Depends(get_db),
-    recruiter: Recruiter = Depends(require_recruiter),
-):
-    rows = _candidate_query(db, recruiter.org_id, role, tech, min_experience, status)
-    buffer = io.StringIO()
-    writer = csv.writer(buffer)
-    writer.writerow(["Name", "Email", "Phone", "Location", "Experience", "Role", "Tech Stack", "Status", "Step", "Resume", "Applied At"])
-    for c, s in rows:
-        writer.writerow([
-            _csv_safe(c.name), _csv_safe(c.email), _csv_safe(c.phone), _csv_safe(c.location),
-            c.experience, _csv_safe(c.role),
-            _csv_safe(", ".join(c.tech_stack) if c.tech_stack else ""),
-            s.status, s.current_step, _csv_safe(c.resume_filename or ""),
-            c.created_at.isoformat() if c.created_at else "",
-        ])
-    buffer.seek(0)
-    return StreamingResponse(iter([buffer.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=candidates.csv"})
+            # Candidate chose to replace — the cascade-delete chain (see
+            # migrate_cascade_deletes.py) cleans up the old candidate's session,
+            # messages, logs, and any MCQ data automatically.
+            db.delete(duplicate)
+            db.commit()
+    if not body.email or not is_valid_email(body.email):
+        msg = "That doesn't look like a valid email address — please fix it and confirm again."
+        db.add(Message(session_id=session_uuid, role="assistant", content=msg))
+        db.commit()
+        return MessageResponse(messages=[msg], step=state.step, candidate=vars(state.candidate), extracted=state.pending_resume_data)
 
+    if not body.phone or not is_valid_phone(body.phone):
+        msg = "That doesn't look like a valid phone number — please fix it and confirm again."
+        db.add(Message(session_id=session_uuid, role="assistant", content=msg))
+        db.commit()
+        return MessageResponse(messages=[msg], step=state.step, candidate=vars(state.candidate), extracted=state.pending_resume_data)
 
-@router.post("/candidates/delete")
-def delete_candidates(
-    body: DeleteCandidatesRequest, db: SQLASession = Depends(get_db),
-    recruiter: Recruiter = Depends(require_recruiter),
-):
-    deleted = 0
-    for cid_str in body.candidate_ids:
-        try:
-            cid = uuid.UUID(cid_str)
-        except ValueError:
-            continue
-        candidate_row = db.get(Candidate, cid)
-        if candidate_row is None or candidate_row.org_id != recruiter.org_id:
-            continue
-        # Sessions, messages, generated questions, session logs, and any MCQ
-        # assessment/answers all cascade-delete at the DB level (see
-        # migrations/migrate_cascade_deletes.py) — no need to hand-delete each table here anymore.
-        if candidate_row.resume_path:
-            try:
-                if os.path.exists(candidate_row.resume_path):
-                    os.remove(candidate_row.resume_path)
-            except OSError:
-                pass  # best-effort cleanup — don't block the actual deletion over this
-        db.delete(candidate_row)
-        deleted += 1
-    db.commit()
-    return {"deleted": deleted}
+    if body.experience and not is_valid_experience(body.experience):
+        msg = 'Experience should be a number, like "2" or "2.5" — please fix it and confirm again.'
+        db.add(Message(session_id=session_uuid, role="assistant", content=msg))
+        db.commit()
+        return MessageResponse(messages=[msg], step=state.step, candidate=vars(state.candidate), extracted=state.pending_resume_data)
 
+    db.add(Message(session_id=session_uuid, role="user", content="[confirmed edited resume data]"))
+    result = handle_user_input(state, "yes")
+    state = result.state
+    ACTIVE_SESSIONS[session_id] = state
 
-@router.get("/candidates/{candidate_id}/logs")
-def candidate_logs(
-    candidate_id: str, db: SQLASession = Depends(get_db),
-    recruiter: Recruiter = Depends(require_recruiter),
-):  
-    try:
-        cid = uuid.UUID(candidate_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid candidate_id")
-    candidate_row = db.get(Candidate, cid)
-    if candidate_row is None or candidate_row.org_id != recruiter.org_id:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-    session_row = db.query(SessionModel).filter(SessionModel.candidate_id == cid).first()
-    if session_row is None:
-        return []
-    logs = db.query(SessionLog).filter(SessionLog.session_id == session_row.id).order_by(SessionLog.timestamp).all()
-    return [{"event_type": l.event_type, "detail": l.detail, "timestamp": l.timestamp.isoformat()} for l in logs]
+    for msg in result.bot_messages:
+        db.add(Message(session_id=session_uuid, role="assistant", content=msg))
 
+    _mark_step(db, session_uuid, session_row, state.step)
+    
+    _sync_candidate_row(db, session_row.candidate_id, state)
 
-@router.get("/candidates/{candidate_id}/resume")
-def download_resume(
-    candidate_id: str, db: SQLASession = Depends(get_db),
-    recruiter: Recruiter = Depends(require_recruiter),
-):
-    try:
-        cid = uuid.UUID(candidate_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid candidate_id")
-    candidate_row = db.get(Candidate, cid)
-    if candidate_row is None or candidate_row.org_id != recruiter.org_id:
-        raise HTTPException(status_code=404, detail="Candidate not found")
-    if not candidate_row.resume_path or not os.path.exists(candidate_row.resume_path):
-        raise HTTPException(status_code=404, detail="No resume on file for this candidate")
-    return FileResponse(
-        candidate_row.resume_path,
-        filename=candidate_row.resume_filename or "resume",
-        media_type="application/octet-stream",
-    )
+    bot_messages = list(result.bot_messages)
+    state, bot_messages = _post_process_turn(state, session_uuid, db, session_row, bot_messages)
+
+    return MessageResponse(messages=bot_messages, step=state.step, candidate=vars(state.candidate))
