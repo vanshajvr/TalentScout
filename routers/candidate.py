@@ -8,7 +8,7 @@ from docx import Document as DocxDocument
 import json
 
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
@@ -16,7 +16,7 @@ from db.models import Candidate, Session as SessionModel, Message, GeneratedQues
 from conversation import ConversationState, handle_user_input, get_bot_message
 from llm.groq_llm import GroqLLM
 from utils.constants import BEHAVIORAL_QUESTION_TEMPLATES
-from utils.validators import is_valid_email, is_valid_phone
+from utils.validators import is_valid_email, is_valid_phone, is_valid_experience
 from deps import get_candidate_or_404, get_session_or_404
 
 router = APIRouter()
@@ -44,15 +44,15 @@ class MessageResponse(BaseModel):
     extracted: dict | None = None
 
 class ConfirmResumeRequest(BaseModel):
-    email: str | None = None
-    phone: str | None = None
-    location: str | None = None
-    experience: str | None = None
-    role: str | None = None
-    tech_stack: list[str] | None = None
-    education: str | None = None
-    linkedin: str | None = None
-    github: str | None = None
+    email: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=20)
+    location: str | None = Field(default=None, max_length=120)
+    experience: str | None = Field(default=None, max_length=20)
+    role: str | None = Field(default=None, max_length=120)
+    tech_stack: list[str] | None = Field(default=None, max_length=50)
+    education: str | None = Field(default=None, max_length=255)
+    linkedin: str | None = Field(default=None, max_length=255)
+    github: str | None = Field(default=None, max_length=255)
 
 def _extract_resume_text(file_path: str, ext: str) -> str:
     if ext == ".pdf":
@@ -102,7 +102,10 @@ def _sync_candidate_row(db: SQLASession, candidate_id: uuid.UUID, state: Convers
     row.education = c.education or None
     row.phone = c.phone or None
     row.location = c.location or None
-    row.experience = float(c.experience.replace("+", "")) if c.experience else None
+    if c.experience and is_valid_experience(c.experience):
+        row.experience = float(c.experience.replace("+", ""))
+    else:
+        row.experience = None
     row.role = c.role or None
     row.tech_stack = c.tech_stack or None
     row.linkedin_url = c.linkedin or None
@@ -436,6 +439,12 @@ def confirm_resume_data(session_id: str, body: ConfirmResumeRequest, db: SQLASes
 
     if not body.phone or not is_valid_phone(body.phone):
         msg = "That doesn't look like a valid phone number — please fix it and confirm again."
+        db.add(Message(session_id=session_uuid, role="assistant", content=msg))
+        db.commit()
+        return MessageResponse(messages=[msg], step=state.step, candidate=vars(state.candidate), extracted=state.pending_resume_data)
+
+    if body.experience and not is_valid_experience(body.experience):
+        msg = 'Experience should be a number, like "2" or "2.5" — please fix it and confirm again.'
         db.add(Message(session_id=session_uuid, role="assistant", content=msg))
         db.commit()
         return MessageResponse(messages=[msg], step=state.step, candidate=vars(state.candidate), extracted=state.pending_resume_data)
