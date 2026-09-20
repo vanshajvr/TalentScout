@@ -168,6 +168,7 @@ class MCQQuestion(Base):
 
 class MCQAssessment(Base):
     __tablename__ = "mcq_assessments"
+    __table_args__ = (UniqueConstraint("session_id", name="uq_mcq_assessment_session"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"))
@@ -181,6 +182,7 @@ class MCQAssessment(Base):
 
 class MCQAnswer(Base):
     __tablename__ = "mcq_answers"
+    __table_args__ = (UniqueConstraint("assessment_id", "question_index", name="uq_mcq_answer_assessment_question"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     assessment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("mcq_assessments.id", ondelete="CASCADE"))

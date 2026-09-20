@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
@@ -218,7 +219,18 @@ def _serve_question(db: SQLASession, assessment: MCQAssessment, candidate) -> MC
         )
 
     db.add(answer)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Another concurrent request (double-click, second tab) already created the
+        # answer row at this exact question_index between our check and our insert.
+        db.rollback()
+        existing = db.query(MCQAnswer).filter(
+            MCQAnswer.assessment_id == assessment.id, MCQAnswer.question_index == index,
+        ).first()
+        if existing is None:
+            raise  # genuinely unexpected — not the race we were guarding against
+        return existing
     db.refresh(answer)
     return answer
 
@@ -261,8 +273,17 @@ def get_current_question(session_id: str, db: SQLASession = Depends(get_db)):
     if assessment is None:
         assessment = MCQAssessment(session_id=session_uuid)
         db.add(assessment)
-        db.commit()
-        db.refresh(assessment)
+        try:
+            db.commit()
+        except IntegrityError:
+            # Another concurrent request already created the assessment for this session
+            # between our check and our insert.
+            db.rollback()
+            assessment = db.query(MCQAssessment).filter(MCQAssessment.session_id == session_uuid).first()
+            if assessment is None:
+                raise  # genuinely unexpected — not the race we were guarding against
+        else:
+            db.refresh(assessment)
 
     answer = _serve_question(db, assessment, candidate)
     return _to_response(answer)
@@ -290,7 +311,12 @@ def submit_answer(session_id: str, body: MCQAnswerRequest, db: SQLASession = Dep
 
     if answer.question_type == "technical":
         is_late = elapsed > (MCQ_TECHNICAL_TIME_LIMIT_SECONDS + NETWORK_LATENCY_BUFFER_SECONDS)
-        if is_late:
+        no_selection = not body.selected_option_id
+        if is_late or no_selection:
+            # No selection at all is always treated as a timeout, even inside the grace
+            # window — otherwise a client auto-submitting with null right as its local
+            # timer hits 0 (a couple seconds before the server's own deadline) gets
+            # rejected as an invalid option id instead of just being marked unanswered.
             answer.selected_option_id = None
             answer.is_correct = False
             answer.time_taken_seconds = MCQ_TECHNICAL_TIME_LIMIT_SECONDS
@@ -324,20 +350,23 @@ def submit_answer(session_id: str, body: MCQAnswerRequest, db: SQLASession = Dep
         answer.time_taken_seconds = round(elapsed)
 
     answer.answered_at = now
-    db.commit()
 
     assessment.current_question_index += 1
-    if assessment.current_question_index >= MCQ_TOTAL_COUNT:
+    is_last = assessment.current_question_index >= MCQ_TOTAL_COUNT
+    if is_last:
         assessment.status = "completed"
         assessment.completed_at = now
-        db.commit()
+
+    db.commit()  # answer + index bump (+ completion, if last) commit together — a crash
+                 # between them previously left the candidate stuck on "already answered"
+                 # with no way to advance, since the index was never bumped.
+
+    if is_last:
         # NOTE: goes straight to "end" for now. Once the recruiter live-join feature lands,
         # this should transition to an intermediate step instead, per the 90s live-join
         # window design in the progress doc.
         _mark_step(db, session_uuid, session_row, "end")
         return MCQQuestionResponse(completed=True)
-
-    db.commit()
     next_answer = _serve_question(db, assessment, candidate)
     return _to_response(next_answer)
 
