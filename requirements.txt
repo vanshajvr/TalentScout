@@ -11,3 +11,4 @@ python-docx
 groq
 pydantic
 json-repair
+argon2-cffi

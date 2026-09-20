@@ -95,7 +95,7 @@ class Recruiter(Base):
     name: Mapped[str] = mapped_column(String(120))
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(200))
-    password_salt: Mapped[str] = mapped_column(String(64))
+    password_salt: Mapped[str | None] = mapped_column(String(64), nullable=True)  # legacy PBKDF2 accounts only — argon2 embeds its own salt
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"))
     role: Mapped[str] = mapped_column(String(20), default="recruiter")  # "admin" | "recruiter"
@@ -163,6 +163,7 @@ class MCQQuestion(Base):
     options: Mapped[list] = mapped_column(JSON)  # [{"id": ..., "text": ...}, ...]
     correct_option_id: Mapped[str] = mapped_column(String(10))
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    reviewed: Mapped[bool] = mapped_column(Boolean, default=False)  # human-verified correct_option_id; not yet enforced anywhere
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
 

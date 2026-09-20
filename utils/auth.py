@@ -13,16 +13,40 @@ VALID_TOKENS: dict[str, tuple[str, datetime]] = {}
 TOKEN_TTL = timedelta(hours=12)
 
 
-def hash_password(password: str, salt: str | None = None) -> tuple[str, str]:
-    if salt is None:
-        salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100_000)
-    return digest.hex(), salt
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, InvalidHash
+
+_argon2_hasher = PasswordHasher()
 
 
-def verify_password(password: str, salt: str, expected_hash: str) -> bool:
-    digest, _ = hash_password(password, salt)
-    return secrets.compare_digest(digest, expected_hash)
+def hash_password(password: str) -> str:
+    """Argon2's hash string embeds its own salt and cost parameters — no separate
+    salt column needed for any account created from here on."""
+    return _argon2_hasher.hash(password)
+
+
+def verify_password(password: str, password_hash: str, password_salt: str | None = None) -> tuple[bool, str | None]:
+    """
+    Returns (is_valid, upgraded_hash). upgraded_hash is non-None only when a legacy
+    PBKDF2 account (from before the argon2 switch) just verified correctly — callers
+    should persist it as the account's new password_hash (and clear password_salt),
+    migrating that account to argon2 the moment it next logs in successfully, with
+    no separate mass-reset ever needed.
+    """
+    if password_hash.startswith("$argon2"):
+        try:
+            _argon2_hasher.verify(password_hash, password)
+            return True, None
+        except (VerifyMismatchError, InvalidHash):
+            return False, None
+
+    # Legacy PBKDF2 hash — needs the salt that was stored alongside it.
+    if password_salt is None:
+        return False, None
+    legacy_digest = hashlib.pbkdf2_hmac("sha256", password.encode(), password_salt.encode(), 100_000).hex()
+    if secrets.compare_digest(legacy_digest, password_hash):
+        return True, hash_password(password)
+    return False, None
 
 
 def hash_token(token: str) -> str:

@@ -1,6 +1,6 @@
 import uuid
 from fastapi import APIRouter, HTTPException, Depends, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
@@ -20,7 +20,12 @@ class OrgSignupRequest(BaseModel):
     org_name: str = Field(max_length=60)
     name: str = Field(max_length=120)
     email: str = Field(max_length=255)
-    password: str = Field(max_length=128)
+    password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
 
 
 @router.post("/signup", response_model=AuthResponse)
@@ -47,10 +52,10 @@ def create_org_and_admin(body: OrgSignupRequest, request: Request, db: SQLASessi
     db.add(org)
     db.flush()  # assigns org.id without committing yet
 
-    password_hash, salt = hash_password(body.password)
+    password_hash = hash_password(body.password)
     recruiter = Recruiter(
         name=body.name, email=body.email, password_hash=password_hash,
-        password_salt=salt, org_id=org.id, role="admin",
+        org_id=org.id, role="admin",
     )
     db.add(recruiter)
     db.commit()

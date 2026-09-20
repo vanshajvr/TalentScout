@@ -2,16 +2,16 @@ import csv
 import io
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session as SQLASession
 
 import db
 from db.database import get_db
-from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter, SessionLog, InviteToken, Organization, MCQAssessment, MCQAnswer, MCQQuestion
+from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter, SessionLog, InviteToken, Organization, MCQAssessment, MCQAnswer, MCQQuestion, RecruiterSession
 
 from utils.validators import is_valid_email
 from utils.auth import (
@@ -26,13 +26,23 @@ router = APIRouter(prefix="/recruiter")
 class SignupRequest(BaseModel):
     name: str
     email: str
-    password: str
+    password: str = Field(min_length=8)
     invite_code: str
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
 
 
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        return v.strip().lower()
 
 class DeleteCandidatesRequest(BaseModel):
     candidate_ids: list[str]
@@ -67,10 +77,10 @@ def recruiter_signup(body: SignupRequest, request: Request, db: SQLASession = De
         raise HTTPException(status_code=400, detail="An account with this email already exists")
     
 
-    password_hash, salt = hash_password(body.password)
+    password_hash = hash_password(body.password)
     recruiter = Recruiter(
         name=body.name, email=body.email, password_hash=password_hash,
-        password_salt=salt, org_id=token_row.org_id, role="recruiter",
+        org_id=token_row.org_id, role="recruiter",
     )
     db.add(recruiter)
     db.flush()  # assigns recruiter.id without committing — the row lock on token_row
@@ -89,15 +99,44 @@ def recruiter_signup(body: SignupRequest, request: Request, db: SQLASession = De
     token = issue_token(recruiter, db, ip=ip, user_agent=user_agent)
     return AuthResponse(token=token, name=recruiter.name)
 
+LOGIN_LOCKOUT_THRESHOLD = 5
+LOGIN_LOCKOUT_WINDOW_MINUTES = 15
+
+
 @router.post("/login", response_model=AuthResponse)
 def recruiter_login(body: LoginRequest, request: Request, db: SQLASession = Depends(get_db)):
     ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
 
+    window_start = datetime.utcnow() - timedelta(minutes=LOGIN_LOCKOUT_WINDOW_MINUTES)
+    recent_failures = db.query(RecruiterSession).filter(
+        RecruiterSession.email_attempted == body.email,
+        RecruiterSession.success.is_(False),
+        RecruiterSession.started_at >= window_start,
+    ).count()
+    if recent_failures >= LOGIN_LOCKOUT_THRESHOLD:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many failed login attempts. Please try again in {LOGIN_LOCKOUT_WINDOW_MINUTES} minutes.",
+        )
+
     recruiter = db.query(Recruiter).filter(Recruiter.email == body.email).first()
-    if recruiter is None or not verify_password(body.password, recruiter.password_salt, recruiter.password_hash):
+    if recruiter is None:
+        record_failed_login(db, body.email, ip, user_agent, recruiter=None)
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+    is_valid, upgraded_hash = verify_password(body.password, recruiter.password_hash, recruiter.password_salt)
+    if not is_valid:
         record_failed_login(db, body.email, ip, user_agent, recruiter=recruiter)
         raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+    if upgraded_hash is not None:
+        # A legacy PBKDF2 account just verified correctly — migrate it to argon2 now,
+        # since we have the real password in hand and will never get another chance
+        # to do this without asking the user to reset it.
+        recruiter.password_hash = upgraded_hash
+        recruiter.password_salt = None
+        db.commit()
 
     token = issue_token(recruiter, db, ip=ip, user_agent=user_agent)
     return AuthResponse(token=token, name=recruiter.name)
@@ -258,6 +297,17 @@ def candidate_questions(
     }
 
 
+def _csv_safe(value) -> str:
+    """Neutralizes CSV formula injection: a cell value starting with =, +, -, or @
+    gets interpreted as a formula by Excel/Google Sheets when the export is opened.
+    Every field here traces back to a candidate-supplied resume, so all of it is
+    attacker-controlled. Prefixing with a single quote forces literal-text display."""
+    text = str(value) if value is not None else ""
+    if text and text[0] in ("=", "+", "-", "@"):
+        return "'" + text
+    return text
+
+
 @router.get("/candidates/export")
 def export_candidates(
     role: str | None = None, tech: str | None = None,
@@ -271,9 +321,10 @@ def export_candidates(
     writer.writerow(["Name", "Email", "Phone", "Location", "Experience", "Role", "Tech Stack", "Status", "Step", "Resume", "Applied At"])
     for c, s in rows:
         writer.writerow([
-            c.name, c.email, c.phone, c.location, c.experience, c.role,
-            ", ".join(c.tech_stack) if c.tech_stack else "",
-            s.status, s.current_step, c.resume_filename or "",
+            _csv_safe(c.name), _csv_safe(c.email), _csv_safe(c.phone), _csv_safe(c.location),
+            c.experience, _csv_safe(c.role),
+            _csv_safe(", ".join(c.tech_stack) if c.tech_stack else ""),
+            s.status, s.current_step, _csv_safe(c.resume_filename or ""),
             c.created_at.isoformat() if c.created_at else "",
         ])
     buffer.seek(0)
