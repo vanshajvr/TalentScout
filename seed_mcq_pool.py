@@ -15,16 +15,12 @@ load_dotenv()
 from db.database import SessionLocal
 from db.models import MCQQuestion
 from llm.groq_llm import GroqLLM
-from utils.constants import MCQ_DIFFICULTY_TIERS, MCQ_FORMATS
+from utils.constants import MCQ_DIFFICULTY_TIERS, MCQ_FORMATS, MCQ_SEEDED_TECHNOLOGIES
 from utils.llm_json import parse_llm_json
 
 llm = GroqLLM()
 
-TECHNOLOGIES = [
-    "Python", "JavaScript", "TypeScript", "React", "Node.js", "SQL",
-    "Java", "C++", "Go", "AWS", "Docker", "Kubernetes",
-    "General Programming",  # always-seeded fallback bucket — see _sample_technical_question
-]
+TECHNOLOGIES = MCQ_SEEDED_TECHNOLOGIES + ["General Programming"]
 
 QUESTIONS_PER_BUCKET = 10  # evenly distributed across the 5 formats
 
@@ -79,6 +75,13 @@ def main():
                     format_ = item.get("format")
 
                     if not question_text or not options or len(options) != 4 or not correct_option_id:
+                        continue
+                    option_ids = {opt.get("id") for opt in options if isinstance(opt, dict)}
+                    if len(option_ids) != 4 or correct_option_id not in option_ids:
+                        # The LLM claimed a correct_option_id that isn't among its own
+                        # options (or the options are malformed) — every possible answer
+                        # to this question would be marked wrong. Reject it outright
+                        # rather than seeding a genuinely unanswerable question.
                         continue
                     if format_ not in MCQ_FORMATS:
                         format_ = MCQ_FORMATS[0]  # sane default rather than dropping the question

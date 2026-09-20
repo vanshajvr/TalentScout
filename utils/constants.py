@@ -27,3 +27,13 @@ MCQ_FORMATS = [
 # Low to high — matches _difficulty_tier()'s ordering in candidate.py, reused as-is
 # for the adaptive-difficulty rule (2 correct in a row -> bump one tier, 2 wrong -> drop one).
 MCQ_DIFFICULTY_TIERS = ["fundamentals", "applied", "advanced"]
+
+# The technical question pool is only seeded for these — anything else falls back to
+# "General Programming" (see _sample_technical_question in routers/mcq.py). Shared with
+# the resume-extraction prompt so the LLM can normalize free-text tech stacks (e.g.
+# "FastAPI", "PostgreSQL") toward names the pool actually has questions for, instead of
+# nearly every real resume missing the pool entirely.
+MCQ_SEEDED_TECHNOLOGIES = [
+    "Python", "JavaScript", "TypeScript", "React", "Node.js", "SQL",
+    "Java", "C++", "Go", "AWS", "Docker", "Kubernetes",
+]

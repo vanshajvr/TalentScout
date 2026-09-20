@@ -29,4 +29,11 @@ Rules:
 - linkedin/github may similarly appear as "[link: https://linkedin.com/in/...]"
   or "[link: https://github.com/...]" rather than plain text — extract the
   full URL from the link marker if the visible label alone isn't a real URL.
+- tech_stack should list the underlying technologies/languages the candidate actually
+  works with, normalized toward these canonical names where a reasonable match exists:
+  {canonical_technologies}. For example: FastAPI, Django, Flask, pandas, NumPy,
+  TensorFlow, PyTorch -> "Python"; Express, Express.js, NestJS -> "Node.js";
+  Next.js -> "React"; PostgreSQL, MySQL, SQLite -> "SQL". If a genuinely different
+  technology is the clearest fit (e.g. Rust, PHP, Ruby), keep its own name rather than
+  forcing it into one of the canonical ones.
 - Output ONLY the JSON object, nothing else.

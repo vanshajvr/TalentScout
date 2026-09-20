@@ -15,7 +15,7 @@ from db.database import get_db
 from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, SessionLog, Organization
 from conversation import ConversationState, handle_user_input, get_bot_message
 from llm.groq_llm import GroqLLM
-from utils.constants import BEHAVIORAL_QUESTION_TEMPLATES
+from utils.constants import BEHAVIORAL_QUESTION_TEMPLATES, MCQ_SEEDED_TECHNOLOGIES
 from utils.validators import is_valid_email, is_valid_phone, is_valid_experience
 from deps import get_candidate_or_404, get_session_or_404
 
@@ -76,7 +76,10 @@ def _extract_resume_fields(resume_text: str) -> dict:
     if not resume_text.strip():
         return {}
     prompt_template = _load_prompt("prompts/resume_extraction_prompt.txt")
-    prompt = prompt_template.format(resume_text=resume_text[:6000])
+    prompt = prompt_template.format(
+        resume_text=resume_text[:6000],
+        canonical_technologies=", ".join(MCQ_SEEDED_TECHNOLOGIES),
+    )
     try:
         raw = llm.generate(prompt, temperature=0).strip()
         if raw.startswith("```"):
