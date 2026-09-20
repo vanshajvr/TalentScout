@@ -12,7 +12,13 @@ def is_valid_name(name: str) -> bool:
 
 def is_valid_email(email: str) -> bool:
     try:
-        validate_email(email, check_deliverability=True)
+        # check_deliverability=False: this should be a fast, reliable, in-process
+        # format check, not a live DNS/MX lookup on every signup and every resume
+        # confirmation. Deliverability checking only confirms the domain has some
+        # mail-accepting DNS record — it doesn't verify the actual mailbox exists
+        # (that needs a real SMTP handshake) — so the correctness value it adds is
+        # marginal next to the latency and DNS-as-a-single-point-of-failure cost.
+        validate_email(email, check_deliverability=False)
         return True
     except EmailNotValidError:
         return False

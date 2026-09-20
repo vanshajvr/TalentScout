@@ -92,21 +92,48 @@ function showResumeConfirmCard(extracted, sessionData) {
   const div = document.createElement("div");
   div.className = "bubble bot";
   div.style.maxWidth = "90%";
-  div.innerHTML = `
-    <div style="margin-bottom:10px;">Here's what I found — edit anything, then confirm:</div>
-    <div style="display:flex; flex-direction:column; gap:8px;">
-      <input id="edit-email" placeholder="Email" value="${extracted.email || ""}">
-      <input id="edit-phone" placeholder="Phone" value="${extracted.phone || ""}">
-      <input id="edit-location" placeholder="Location" value="${extracted.location || ""}">
-      <input id="edit-education" placeholder="Education" value="${extracted.education || ""}">
-      <input id="edit-experience" placeholder="Years of experience" value="${extracted.experience ?? ""}">
-      <input id="edit-role" placeholder="Role" value="${extracted.role || ""}">
-      <input id="edit-tech" placeholder="Tech stack (comma separated)" value="${(extracted.tech_stack || []).join(", ")}">
-      <input id="edit-linkedin" placeholder="LinkedIn URL" value="${extracted.linkedin || ""}">
-      <input id="edit-github" placeholder="GitHub URL" value="${extracted.github || ""}">
-    </div>
-    <button id="confirm-resume-btn" style="margin-top:10px;">Confirm & Continue</button>
-  `;
+
+  const intro = document.createElement("div");
+  intro.style.marginBottom = "10px";
+  intro.textContent = "Here's what I found — edit anything, then confirm:";
+  div.appendChild(intro);
+
+  const fieldsWrap = document.createElement("div");
+  fieldsWrap.style.display = "flex";
+  fieldsWrap.style.flexDirection = "column";
+  fieldsWrap.style.gap = "8px";
+
+  // Built via createElement + the .value PROPERTY, not string-interpolated HTML —
+  // this is a DOM assignment, never parsed as markup, so it's immune to attribute-
+  // breakout/injection regardless of what characters a resume-derived value contains
+  // (previously: value="${extracted.email}" etc., where a literal " in the extracted
+  // text could break out of the attribute and inject arbitrary markup).
+  const fieldDefs = [
+    ["edit-email", "Email", extracted.email || ""],
+    ["edit-phone", "Phone", extracted.phone || ""],
+    ["edit-location", "Location", extracted.location || ""],
+    ["edit-education", "Education", extracted.education || ""],
+    ["edit-experience", "Years of experience", extracted.experience ?? ""],
+    ["edit-role", "Role", extracted.role || ""],
+    ["edit-tech", "Tech stack (comma separated)", (extracted.tech_stack || []).join(", ")],
+    ["edit-linkedin", "LinkedIn URL", extracted.linkedin || ""],
+    ["edit-github", "GitHub URL", extracted.github || ""],
+  ];
+  fieldDefs.forEach(([id, placeholder, value]) => {
+    const input = document.createElement("input");
+    input.id = id;
+    input.placeholder = placeholder;
+    input.value = value;
+    fieldsWrap.appendChild(input);
+  });
+  div.appendChild(fieldsWrap);
+
+  const confirmBtn = document.createElement("button");
+  confirmBtn.id = "confirm-resume-btn";
+  confirmBtn.style.marginTop = "10px";
+  confirmBtn.textContent = "Confirm & Continue";
+  div.appendChild(confirmBtn);
+
   chatEl.appendChild(div);
   chatEl.scrollTop = chatEl.scrollHeight;
 
