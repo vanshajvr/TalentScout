@@ -123,7 +123,7 @@ class InviteToken(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     code: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recruiters.id"), nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recruiters.id", ondelete="SET NULL"), nullable=True)
     used_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recruiters.id", ondelete="SET NULL"), nullable=True)
     used_by_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     used_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)

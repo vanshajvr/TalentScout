@@ -49,10 +49,10 @@ def recruiter_signup(body: SignupRequest, request: Request, db: SQLASession = De
     ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
 
-    token_row = db.query(InviteToken).filter(InviteToken.code == body.invite_code).first()
+    token_row = db.query(InviteToken).filter(InviteToken.code == body.invite_code).with_for_update().first()
     if token_row is None:
         raise HTTPException(status_code=403, detail="Invalid invite code")
-    if token_row.used_by is not None:
+    if token_row.used_at is not None:
         raise HTTPException(status_code=403, detail="This invite code has already been used")
     if token_row.revoked_at is not None:
         raise HTTPException(status_code=403, detail="This invite code has been revoked")
@@ -73,15 +73,18 @@ def recruiter_signup(body: SignupRequest, request: Request, db: SQLASession = De
         password_salt=salt, org_id=token_row.org_id, role="recruiter",
     )
     db.add(recruiter)
-    db.commit()
-    db.refresh(recruiter)
+    db.flush()  # assigns recruiter.id without committing — the row lock on token_row
+                # must survive until both the recruiter row and the token's used_* fields
+                # are written together, or a second concurrent request could still slip
+                # through between two separate commits.
 
     token_row.used_by = recruiter.id
     token_row.used_by_name = recruiter.name
     token_row.used_ip = ip
     token_row.used_user_agent = user_agent
-    token_row.used_at = datetime.now()
+    token_row.used_at = datetime.utcnow()
     db.commit()
+    db.refresh(recruiter)
 
     token = issue_token(recruiter, db, ip=ip, user_agent=user_agent)
     return AuthResponse(token=token, name=recruiter.name)

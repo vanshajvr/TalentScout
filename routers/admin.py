@@ -1,6 +1,6 @@
 import uuid
 from fastapi import APIRouter, HTTPException, Depends, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
@@ -17,10 +17,10 @@ from utils.schemas import AuthResponse
 
 router = APIRouter(prefix="/admin")
 class OrgSignupRequest(BaseModel):
-    org_name: str
-    name: str
-    email: str
-    password: str
+    org_name: str = Field(max_length=60)
+    name: str = Field(max_length=120)
+    email: str = Field(max_length=255)
+    password: str = Field(max_length=128)
 
 
 @router.post("/signup", response_model=AuthResponse)
@@ -32,17 +32,20 @@ def create_org_and_admin(body: OrgSignupRequest, request: Request, db: SQLASessi
     if db.query(Organization).filter(Organization.slug == slug).first():
         raise HTTPException(status_code=400, detail="An organization with this name already exists")
 
-    org = Organization(name=body.org_name, slug=slug)
-    db.add(org)
-    db.commit()
-    db.refresh(org)
-
     if not is_valid_email(body.email):
         raise HTTPException(status_code=400, detail="Please enter a valid email address")
 
     existing = db.query(Recruiter).filter(Recruiter.email == body.email).first()
     if existing is not None:
         raise HTTPException(status_code=400, detail="An account with this email already exists")
+
+    # Org and admin are created together in one transaction — if anything fails between
+    # them, neither is persisted, instead of leaving an orphan Organization row behind
+    # (which previously happened whenever email validation or the duplicate-account
+    # check failed after the org had already been committed on its own).
+    org = Organization(name=body.org_name, slug=slug)
+    db.add(org)
+    db.flush()  # assigns org.id without committing yet
 
     password_hash, salt = hash_password(body.password)
     recruiter = Recruiter(
@@ -52,6 +55,7 @@ def create_org_and_admin(body: OrgSignupRequest, request: Request, db: SQLASessi
     db.add(recruiter)
     db.commit()
     db.refresh(recruiter)
+    db.refresh(org)
 
     token = issue_token(
         recruiter, db,
@@ -212,7 +216,7 @@ def admin_overview(db: SQLASession = Depends(get_db), admin: Recruiter = Depends
     now = datetime.utcnow()
     pending_invites = db.query(InviteToken).filter(
         InviteToken.org_id == admin.org_id,
-        InviteToken.used_by.is_(None),
+        InviteToken.used_at.is_(None),
         InviteToken.revoked_at.is_(None),
         (InviteToken.expires_at.is_(None)) | (InviteToken.expires_at > now),
     ).count()

@@ -271,6 +271,8 @@ def get_current_question(session_id: str, db: SQLASession = Depends(get_db)):
 
     assessment = db.query(MCQAssessment).filter(MCQAssessment.session_id == session_uuid).first()
     if assessment is None:
+        if session_row.current_step != "mcq_assessment":
+            raise HTTPException(status_code=409, detail="This session hasn't reached the assessment step yet")
         assessment = MCQAssessment(session_id=session_uuid)
         db.add(assessment)
         try:
