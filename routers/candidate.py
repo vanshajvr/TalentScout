@@ -7,7 +7,7 @@ import pdfplumber
 from docx import Document as DocxDocument
 import json
 
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session as SQLASession
 
@@ -17,6 +17,7 @@ from conversation import ConversationState, handle_user_input, get_bot_message
 from llm.groq_llm import GroqLLM
 from utils.constants import BEHAVIORAL_QUESTION_TEMPLATES, MCQ_SEEDED_TECHNOLOGIES
 from utils.validators import is_valid_email, is_valid_phone, is_valid_experience
+from utils.rate_limit import check_rate_limit
 from deps import get_candidate_or_404, get_session_or_404
 
 router = APIRouter()
@@ -225,7 +226,10 @@ def _post_process_turn(state, session_uuid, db, session_row, bot_messages):
 
 
 @router.post("/sessions", response_model=StartSessionResponse)
-def start_session(org: str = "default", db: SQLASession = Depends(get_db)):
+def start_session(request: Request, org: str = "default", db: SQLASession = Depends(get_db)):
+    ip = request.client.host if request.client else None
+    check_rate_limit(f"start_session:{ip or 'unknown'}", max_requests=10, window_minutes=60)
+
     org_row = db.query(Organization).filter(Organization.slug == org).first()
     if org_row is None:
         raise HTTPException(status_code=404, detail="Unknown organization")

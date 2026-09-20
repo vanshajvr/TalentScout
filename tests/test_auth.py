@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import uuid
 
 import utils.auth as auth_module
+from db.models import RecruiterSession
 
 
 # --- Role gating ---
@@ -45,12 +46,17 @@ def test_unauthenticated_request_gets_401(client):
 
 # --- Token expiry ---
 
-def test_expired_token_is_rejected(client, signup_org):
+def test_expired_token_is_rejected(client, signup_org, db_session):
     admin = signup_org()
 
-    # Force this specific token to already be expired, without waiting 12 real hours.
-    recruiter_id, _ = auth_module.VALID_TOKENS[admin["token"]]
-    auth_module.VALID_TOKENS[admin["token"]] = (recruiter_id, datetime.utcnow() - timedelta(seconds=1))
+    # Force this specific token's session row to already be expired in the DB,
+    # without waiting 12 real hours. Token validity now lives entirely in
+    # RecruiterSession (see utils/auth.py), not an in-memory store.
+    session_row = db_session.query(RecruiterSession).filter(
+        RecruiterSession.token_hash == auth_module.hash_token(admin["token"])
+    ).first()
+    session_row.expires_at = datetime.utcnow() - timedelta(seconds=1)
+    db_session.commit()
 
     resp = client.get("/admin/team", headers={"Authorization": f"Bearer {admin['token']}"})
 

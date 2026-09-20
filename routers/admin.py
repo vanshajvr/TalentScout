@@ -12,6 +12,7 @@ import secrets
 from datetime import datetime, timedelta
 
 from utils.validators import is_valid_email
+from utils.rate_limit import check_rate_limit
 
 from utils.schemas import AuthResponse
 
@@ -30,6 +31,8 @@ class OrgSignupRequest(BaseModel):
 
 @router.post("/signup", response_model=AuthResponse)
 def create_org_and_admin(body: OrgSignupRequest, request: Request, db: SQLASession = Depends(get_db)):
+    ip = request.client.host if request.client else None
+    check_rate_limit(f"admin_signup:{ip or 'unknown'}", max_requests=3, window_minutes=60)
 
     slug = re.sub(r"[^a-z0-9-]", "-", body.org_name.lower()).strip("-")
     if not slug:
@@ -64,7 +67,7 @@ def create_org_and_admin(body: OrgSignupRequest, request: Request, db: SQLASessi
 
     token = issue_token(
         recruiter, db,
-        ip=request.client.host if request.client else None,
+        ip=ip,
         user_agent=request.headers.get("user-agent"),
     )
     return AuthResponse(token=token, name=recruiter.name)

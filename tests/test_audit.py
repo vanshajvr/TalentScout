@@ -104,8 +104,9 @@ def test_logout_closes_session_row():
 
 
 def test_expired_token_closes_session_row_as_expired():
-    # TODO: login -> backdate VALID_TOKENS entry -> hit a protected route ->
-    # 401, and the RecruiterSession row is closed with end_reason == "expired".
+    # TODO: login -> backdate the RecruiterSession row's expires_at directly (token
+    # validity now lives entirely in the DB, see utils/auth.py) -> hit a protected
+    # route -> 401, and the row is closed with end_reason == "expired".
     pass
 
 

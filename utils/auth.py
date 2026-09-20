@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session as SQLASession
 from db.database import get_db
 from db.models import Recruiter, RecruiterSession
 
-VALID_TOKENS: dict[str, tuple[str, datetime]] = {}
 TOKEN_TTL = timedelta(hours=12)
 
 
@@ -60,12 +59,11 @@ def issue_token(
     recruiter: Recruiter, db: SQLASession, ip: str | None = None, user_agent: str | None = None
 ) -> str:
     token = secrets.token_urlsafe(32)
-    VALID_TOKENS[token] = (str(recruiter.id), datetime.utcnow() + TOKEN_TTL)
 
     db.add(RecruiterSession(
         recruiter_id=recruiter.id, org_id=recruiter.org_id, email_attempted=recruiter.email,
         success=True, ip=ip, user_agent=user_agent, token_hash=hash_token(token),
-        started_at=datetime.utcnow(),
+        expires_at=datetime.utcnow() + TOKEN_TTL, started_at=datetime.utcnow(),
     ))
     db.commit()
     return token
@@ -82,7 +80,7 @@ def record_failed_login(
         recruiter_id=recruiter.id if recruiter else None,
         org_id=recruiter.org_id if recruiter else None,
         email_attempted=email[:255],
-        success=False, ip=ip, user_agent=user_agent, token_hash=None,
+        success=False, ip=ip, user_agent=user_agent, token_hash=None, expires_at=None,
         started_at=datetime.utcnow(),
     ))
     db.commit()
@@ -97,20 +95,25 @@ def close_session(db: SQLASession, token: str, reason: str, at: datetime | None 
 
 
 def logout(db: SQLASession, token: str) -> None:
-    VALID_TOKENS.pop(token, None)
     close_session(db, token, "logout")
 
 
 def _resolve_token(token: str, db: SQLASession) -> str:
-    entry = VALID_TOKENS.get(token)
-    if not entry:
+    """RecruiterSession is now the sole source of truth for token validity — no
+    in-memory dict, so this survives restarts and works correctly across multiple
+    worker processes."""
+    row = db.query(RecruiterSession).filter(RecruiterSession.token_hash == hash_token(token)).first()
+    if row is None or row.ended_at is not None or row.expires_at is None:
         raise HTTPException(status_code=401, detail="Invalid or expired session")
-    recruiter_id, expires_at = entry
-    if datetime.utcnow() > expires_at:
-        del VALID_TOKENS[token]
-        close_session(db, token, "expired", at=expires_at)
+    if datetime.utcnow() > row.expires_at:
+        close_session(db, token, "expired", at=row.expires_at)
         raise HTTPException(status_code=401, detail="Session expired — please log in again")
-    return recruiter_id
+    if row.recruiter_id is None:
+        # The recruiter account behind this token was deleted after the token was
+        # issued (recruiter_id goes NULL via ON DELETE SET NULL) — nothing to
+        # authenticate as anymore, even though the token itself hasn't "expired".
+        raise HTTPException(status_code=401, detail="Invalid or expired session")
+    return str(row.recruiter_id)
 
 
 def require_recruiter(authorization: str = Header(None), db: SQLASession = Depends(get_db)) -> Recruiter:

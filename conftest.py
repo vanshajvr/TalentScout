@@ -38,7 +38,6 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from db.database import engine  # noqa: E402
 from db.models import Base  # noqa: E402
-import utils.auth as auth_module  # noqa: E402
 from main import app  # noqa: E402
 
 
@@ -53,9 +52,10 @@ def _create_schema():
 @pytest.fixture(autouse=True)
 def _clean_state():
     """
-    Runs after every test. Truncates all tables and clears the in-memory
-    token store, so each test starts from a blank slate regardless of
-    execution order.
+    Runs after every test. Truncates all tables so each test starts from a blank
+    slate regardless of execution order — token state now lives entirely in
+    RecruiterSession (see utils/auth.py), so this TRUNCATE alone clears it, no
+    separate in-memory store to reset anymore.
 
     Truncate (not a begin/rollback-per-test pattern) because the app's own
     get_db() dependency opens its own DB session per request, independent
@@ -66,7 +66,6 @@ def _clean_state():
     table_names = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
     with engine.begin() as conn:
         conn.exec_driver_sql(f"TRUNCATE {table_names} RESTART IDENTITY CASCADE")
-    auth_module.VALID_TOKENS.clear()
 
 
 @pytest.fixture

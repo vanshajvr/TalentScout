@@ -147,6 +147,7 @@ class RecruiterSession(Base):
     ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
     token_hash: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(nullable=True)  # None for failed-login rows (no token issued)
     started_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     ended_at: Mapped[datetime | None] = mapped_column(nullable=True)
     end_reason: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "logout" | "expired" | "invalidated"
