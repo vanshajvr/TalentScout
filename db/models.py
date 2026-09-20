@@ -42,7 +42,7 @@ class Session(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    candidate_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("candidates.id"))
+    candidate_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("candidates.id", ondelete="CASCADE"))
     current_step: Mapped[str] = mapped_column(String(50))
     status: Mapped[str] = mapped_column(String(20), default="in_progress")
     started_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
@@ -59,7 +59,7 @@ class GeneratedQuestion(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sessions.id"))
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"))
     technology: Mapped[str] = mapped_column(String(80))
     question_text: Mapped[str] = mapped_column(Text)
     difficulty_tier: Mapped[str] = mapped_column(String(20))
@@ -78,7 +78,7 @@ class Message(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sessions.id"))
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"))
     role: Mapped[str] = mapped_column(String(10))
     content: Mapped[str] = mapped_column(Text)
     is_pasted: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -106,7 +106,7 @@ class SessionLog(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sessions.id"))
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"))
     event_type: Mapped[str] = mapped_column(String(20))  # "step_transition" | "error" | "info"
     detail: Mapped[str] = mapped_column(Text)
     timestamp: Mapped[datetime] = mapped_column(default=datetime.utcnow)
@@ -170,7 +170,7 @@ class MCQAssessment(Base):
     __tablename__ = "mcq_assessments"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sessions.id"))
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"))
     status: Mapped[str] = mapped_column(String(20), default="in_progress")  # in_progress | completed
     current_question_index: Mapped[int] = mapped_column(default=0)
     tab_switch_count: Mapped[int] = mapped_column(default=0)
@@ -183,7 +183,7 @@ class MCQAnswer(Base):
     __tablename__ = "mcq_answers"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    assessment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("mcq_assessments.id"))
+    assessment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("mcq_assessments.id", ondelete="CASCADE"))
     question_index: Mapped[int] = mapped_column()
     question_type: Mapped[str] = mapped_column(String(20))  # technical | behavioral | open_text
     pool_question_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("mcq_questions.id"), nullable=True)

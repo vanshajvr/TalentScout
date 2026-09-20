@@ -1,5 +1,6 @@
 import csv
 import io
+import os
 import uuid
 from datetime import datetime
 
@@ -232,11 +233,15 @@ def delete_candidates(
         candidate_row = db.get(Candidate, cid)
         if candidate_row is None or candidate_row.org_id != recruiter.org_id:
             continue
-        session_ids = [s.id for s in db.query(SessionModel).filter(SessionModel.candidate_id == cid).all()]
-        if session_ids:
-            db.query(GeneratedQuestion).filter(GeneratedQuestion.session_id.in_(session_ids)).delete(synchronize_session=False)
-            db.query(Message).filter(Message.session_id.in_(session_ids)).delete(synchronize_session=False)
-            db.query(SessionModel).filter(SessionModel.candidate_id == cid).delete(synchronize_session=False)
+        # Sessions, messages, generated questions, session logs, and any MCQ
+        # assessment/answers all cascade-delete at the DB level (see
+        # migrate_cascade_deletes.py) — no need to hand-delete each table here anymore.
+        if candidate_row.resume_path:
+            try:
+                if os.path.exists(candidate_row.resume_path):
+                    os.remove(candidate_row.resume_path)
+            except OSError:
+                pass  # best-effort cleanup — don't block the actual deletion over this
         db.delete(candidate_row)
         deleted += 1
     db.commit()

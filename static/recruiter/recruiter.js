@@ -4,7 +4,6 @@ let token = localStorage.getItem("recruiter_token") || null;
 const loginView = document.getElementById("login-view");
 const dashView = document.getElementById("dash-view");
 const candidatesBody = document.getElementById("candidates-body");
-const candidateCount = document.getElementById("candidate-count");
 const exportBtn = document.getElementById("export-btn");
 const applyBtn = document.getElementById("apply-filters");
 const statGrid = document.getElementById("stat-grid");
@@ -94,11 +93,9 @@ async function loadOverview() {
 }
 
 async function loadCandidates() {
-  candidateCount.textContent = "Loading…";
   const params = currentFilters();
   const res = await authedFetch(`${API}/recruiter/candidates?${params.toString()}`);
   const rows = await res.json();
-  candidateCount.textContent = `${rows.length} candidate${rows.length === 1 ? "" : "s"}`;
 
   candidatesBody.innerHTML = "";
   rows.forEach((c) => {
@@ -326,11 +323,17 @@ deleteBtn.addEventListener("click", async () => {
   const confirmed = confirm(`Delete ${selectedIds.size} candidate(s)? This can't be undone.`);
   if (!confirmed) return;
 
-  await fetch(`${API}/recruiter/candidates/delete`, {
+  const res = await fetch(`${API}/recruiter/candidates/delete`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ candidate_ids: Array.from(selectedIds) }),
   });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    alert(formatError(err) || "Failed to delete candidates — please try again.");
+    return;
+  }
 
   selectedIds.clear();
   loadOverview();
