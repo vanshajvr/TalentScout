@@ -111,6 +111,8 @@ def _sync_candidate_row(db: SQLASession, candidate_id: uuid.UUID, state: Convers
 
 
 def _difficulty_tier(experience: str) -> str:
+    if not experience:
+        return "unknown"
     try:
         val = float(experience.replace("+", ""))
     except ValueError:
