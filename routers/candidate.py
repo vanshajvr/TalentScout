@@ -110,12 +110,14 @@ def _sync_candidate_row(db: SQLASession, candidate_id: uuid.UUID, state: Convers
     db.commit()
 
 
-def _difficulty_tier(experience: str) -> str:
-    if not experience:
+def _difficulty_tier(experience) -> str:
+    if experience is None:
         return "unknown"
     try:
-        val = float(experience.replace("+", ""))
-    except ValueError:
+        # experience can arrive as a string (e.g. "3+", from in-memory extraction data)
+        # or as a genuine float (e.g. from the Candidate.experience DB column) — handle both.
+        val = float(experience.replace("+", "")) if isinstance(experience, str) else float(experience)
+    except (ValueError, TypeError):
         return "unknown"
     if val < 1:
         return "fundamentals"
