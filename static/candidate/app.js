@@ -137,8 +137,6 @@ function showResumeConfirmCard(extracted, sessionData) {
   chatEl.appendChild(div);
   chatEl.scrollTop = chatEl.scrollHeight;
 
-  let replaceDuplicate = false;
-
   document.getElementById("confirm-resume-btn").addEventListener("click", async () => {
     const confirmBtn = document.getElementById("confirm-resume-btn");
     const fields = ["edit-email", "edit-phone", "edit-location", "edit-experience",
@@ -155,7 +153,6 @@ function showResumeConfirmCard(extracted, sessionData) {
 
     const payload = {
       email: document.getElementById("edit-email").value.trim() || null,
-      replace_duplicate: replaceDuplicate,
       phone: document.getElementById("edit-phone").value.trim() || null,
       location: document.getElementById("edit-location").value.trim() || null,
       experience: document.getElementById("edit-experience").value.trim() || null,
@@ -165,7 +162,6 @@ function showResumeConfirmCard(extracted, sessionData) {
       linkedin: document.getElementById("edit-linkedin").value.trim() || null,
       github: document.getElementById("edit-github").value.trim() || null,
     };
-    replaceDuplicate = false; // one-shot — only applies to this specific submission
 
     try {
       const res = await fetch(`${API}/sessions/${sessionId}/resume/confirm`, {
@@ -188,32 +184,6 @@ function showResumeConfirmCard(extracted, sessionData) {
           if (el) el.disabled = false;
         });
         setInputEnabled(false); // stay in card-editing mode, not free text
-
-        if (data.duplicate_email_choice) {
-          const choiceDiv = document.createElement("div");
-          choiceDiv.className = "bubble bot";
-
-          const replaceBtn = document.createElement("button");
-          replaceBtn.textContent = "Delete old attempt & continue with this email";
-          replaceBtn.style.marginRight = "8px";
-          replaceBtn.addEventListener("click", () => {
-            choiceDiv.remove();
-            replaceDuplicate = true;
-            confirmBtn.click();
-          });
-
-          const editBtn = document.createElement("button");
-          editBtn.textContent = "Use a different email instead";
-          editBtn.addEventListener("click", () => {
-            choiceDiv.remove();
-            document.getElementById("edit-email").focus();
-          });
-
-          choiceDiv.appendChild(replaceBtn);
-          choiceDiv.appendChild(editBtn);
-          chatEl.appendChild(choiceDiv);
-          chatEl.scrollTop = chatEl.scrollHeight;
-        }
       } else if (data.step === "mcq_assessment") {
         window.location.href = `/static/mcq/mcq.html?session_id=${sessionId}`;
       } else {
@@ -255,14 +225,27 @@ function maybeShowResumeUpload() {
 
 async function startSession() {
   const orgParam = window.CURRENT_ORG_SLUG ? `?org=${window.CURRENT_ORG_SLUG}` : "";
-  const res = await fetch(`${API}/sessions${orgParam}`, { method: "POST" });
-  const data = await res.json();
-  sessionId = data.session_id;
-  addBubble("assistant", data.message);
-  lastKnownStep = "greeting";
-  statusLine.textContent = "Screening in progress";
-  updateProgress("greeting");
-  setInputEnabled(true);
+  try {
+    const res = await fetch(`${API}/sessions${orgParam}`, { method: "POST" });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || "Couldn't start a screening session.");
+    }
+    const data = await res.json();
+    sessionId = data.session_id;
+    addBubble("assistant", data.message);
+    lastKnownStep = "greeting";
+    statusLine.textContent = "Screening in progress";
+    updateProgress("greeting");
+    setInputEnabled(true);
+  } catch (err) {
+    addBubble(
+      "assistant",
+      "This screening link isn't valid — please use the link your recruiter shared with you, or start from your organization's screening page."
+    );
+    statusLine.textContent = "Unable to start";
+    setInputEnabled(false);
+  }
 }
 
 async function sendMessage() {

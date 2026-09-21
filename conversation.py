@@ -109,7 +109,7 @@ def handle_user_input(state: ConversationState, user_input: str) -> StepResult:
 
     if step == "ask_name":
         if not is_valid_name(user_input):
-            bot_messages.append("Please enter your **full name** (first and last name).")
+            bot_messages.append("Please enter your name.")
             return StepResult(state=state, bot_messages=bot_messages)
         candidate.name = user_input
 

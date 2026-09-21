@@ -1,14 +1,20 @@
-import re
-
 from email_validator import validate_email, EmailNotValidError
 
 def is_valid_name(name: str) -> bool:
     name = name.strip()
+    if not name or len(name) > 120:  # matches Candidate.name's DB column limit
+        return False
     parts = name.split()
-    return (
-        len(parts) >= 2
-        and all(re.fullmatch(r"[A-Za-z'\-]+", part) for part in parts)
-    )
+    if not parts:
+        return False
+    for part in parts:
+        # str.isalpha() is Unicode-aware (correctly accepts "José", "François",
+        # "Müller", etc.), unlike the old [A-Za-z] pattern. Apostrophes, hyphens, and
+        # periods are allowed within a part too — "O'Brien", "Anne-Marie", "K.", "J.R."
+        stripped = part.replace("'", "").replace("-", "").replace(".", "")
+        if not stripped or not stripped.isalpha():
+            return False
+    return True
 
 def is_valid_email(email: str) -> bool:
     try:
