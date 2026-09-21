@@ -29,10 +29,6 @@ class ConversationState:
     candidate: CandidateState = field(default_factory=CandidateState)
     retry: bool = False
     pending_resume_data: dict = field(default_factory=dict)
-    interview_plan: list[str] = field(default_factory=list)
-    interview_index: int = 0
-    current_question: str = ""
-    qa_history: list[tuple[str, str]] = field(default_factory=list)
 
 def next_step(current_step: str) -> str:
     idx = STEPS.index(current_step)
@@ -80,11 +76,6 @@ class StepResult:
                                   # instead of "completed" when the step becomes "end"
 
 
-def _build_interview_plan(tech_stack: list[str]) -> list[str]:
-    technical = tech_stack[:MAX_TECHNICAL_QUESTIONS]
-    return technical + ["behavioral_role", "behavioral_stream"]
-
-
 def handle_user_input(state: ConversationState, user_input: str) -> StepResult:
     user_input_clean = user_input.strip().lower()
     bot_messages: list[str] = []
@@ -126,10 +117,6 @@ def handle_user_input(state: ConversationState, user_input: str) -> StepResult:
             candidate.linkedin = c.get("linkedin") or candidate.linkedin
             candidate.github = c.get("github") or candidate.github
 
-            state.interview_plan = _build_interview_plan(candidate.tech_stack)
-            state.interview_index = 0
-            state.current_question = ""
-            state.qa_history = []
             state.step = "mcq_assessment"
             return StepResult(state=state, bot_messages=bot_messages)
         bot_messages.append(get_bot_message(state))
@@ -139,16 +126,6 @@ def handle_user_input(state: ConversationState, user_input: str) -> StepResult:
         bot_messages.append(
         "A resume is required to continue — please use the upload button above."
     )
-        return StepResult(state=state, bot_messages=bot_messages)
-
-    elif step == "mcq_assessment":
-        if state.current_question:
-            state.qa_history.append((state.current_question, user_input))
-        state.interview_index += 1
-        state.current_question = ""
-        if state.interview_index >= len(state.interview_plan):
-            state.step = "end"
-            bot_messages.append(get_bot_message(state))
         return StepResult(state=state, bot_messages=bot_messages)
 
     state.step = next_step(step)

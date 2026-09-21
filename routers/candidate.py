@@ -1,6 +1,6 @@
 import uuid
-import copy
 import os
+import logging
 from datetime import datetime
 
 import pdfplumber
@@ -21,6 +21,7 @@ from utils.rate_limit import check_rate_limit
 from deps import get_candidate_or_404, get_session_or_404
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -86,7 +87,7 @@ def _extract_resume_text(file_path: str, ext: str) -> str:
         return "\n".join(p.text for p in doc.paragraphs)
     return ""
 
-def _extract_resume_fields(resume_text: str) -> dict:
+def _extract_resume_fields(resume_text: str, db: SQLASession, session_uuid: uuid.UUID) -> dict:
     if not resume_text.strip():
         return {}
     prompt_template = _load_prompt("prompts/resume_extraction_prompt.txt")
@@ -100,15 +101,13 @@ def _extract_resume_fields(resume_text: str) -> dict:
             raw = raw.strip("`").replace("json", "", 1).strip()
         return json.loads(raw)
     except Exception as e:
-        print(f"Resume extraction failed: {e}")
+        logger.warning("Resume extraction failed: %s", e)
+        _log_event(db, session_uuid, "llm_fallback", f"Resume extraction failed: {e}")
         return {}
     
 def _load_prompt(path: str) -> str:
     with open(path, "r") as f:
         return f.read()
-
-
-_SYSTEM_PROMPT = _load_prompt("prompts/system_prompt.txt")
 
 
 def _sync_candidate_row(db: SQLASession, candidate_id: uuid.UUID, state: ConversationState) -> None:
@@ -160,82 +159,7 @@ def _mark_step(db: SQLASession, session_uuid: uuid.UUID, session_row: SessionMod
         session_row.status = "abandoned" if exited_early else "completed"
         session_row.completed_at = datetime.utcnow()  # "session ended" timestamp either way — used for duration math regardless of how it ended
     db.commit()
-
-def _format_history(qa_history: list[tuple[str, str]]) -> str:
-    if not qa_history:
-        return "(none yet)"
-    return "\n\n".join(f"Q: {q}\nA: {a}" for q, a in qa_history)
-
-
-def _generate_next_question(state: ConversationState) -> str:
-    if state.interview_index >= len(state.interview_plan):
-        return "Thank you — that's all the questions I have for now."
-    plan_item = state.interview_plan[state.interview_index]
-    role = state.candidate.role
-
-    if plan_item == "behavioral_role":
-        return BEHAVIORAL_QUESTION_TEMPLATES[0].format(role=role)
-    if plan_item == "behavioral_stream":
-        return BEHAVIORAL_QUESTION_TEMPLATES[1].format(role=role, role_lower=role.lower())
-
-    prompt_template = _load_prompt("prompts/next_question_prompt.txt")
-    prompt = prompt_template.format(
-        role=role,
-        experience=state.candidate.experience,
-        technology=plan_item,
-        qa_history=_format_history(state.qa_history),
-    )
-    try:
-        return llm.generate(prompt, system=_SYSTEM_PROMPT).strip()
-    except Exception as e:
-        print(f"LLM generation failed: {e}")
-        return (
-            f"(We're having trouble generating a tailored question right now — "
-            f"tell me about your experience with {plan_item}.)"
-        )
-    
-def _score_answer(question_text: str, answer_text: str, technology: str, experience: str) -> dict:
-    prompt_template = _load_prompt("prompts/answer_scoring_prompt.txt")
-    prompt = prompt_template.format(
-        question_text=question_text,
-        answer_text=answer_text,
-        technology=technology,
-        experience=experience,
-    )
-    try:
-        raw = llm.generate(prompt, temperature=0).strip()
-        if raw.startswith("```"):
-            raw = raw.strip("`").replace("json", "", 1).strip()
-        result = json.loads(raw)
-        return {
-            "correctness": int(result["correctness"]),
-            "reasoning": int(result["reasoning"]),
-            "communication": int(result["communication"]),
-            "justification": result.get("justification"),
-        }
-    
-    except Exception as e:
-        print(f"Answer scoring failed: {e}")
-        return {"correctness": None, "reasoning": None, "communication": None, "justification": None}
         
-    
-def _post_process_turn(state, session_uuid, db, session_row, bot_messages):
-    if state.step == "mcq_assessment" and not state.current_question:
-        question_text = _generate_next_question(state)
-        state.current_question = question_text
-        plan_item = state.interview_plan[state.interview_index]
-        db.add(GeneratedQuestion(
-            session_id=session_uuid,
-            technology=plan_item,
-            question_text=question_text,
-            difficulty_tier=_difficulty_tier(state.candidate.experience),
-            answer_text=None,
-        ))
-        db.add(Message(session_id=session_uuid, role="assistant", content=question_text))
-        db.commit()
-        bot_messages.append(question_text)
-    return state, bot_messages
-
 
 @router.post("/sessions", response_model=StartSessionResponse)
 def start_session(request: Request, org: str = "default", db: SQLASession = Depends(get_db)):
@@ -279,31 +203,9 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
     session_row = get_session_or_404(db, session_uuid)
 
     db.add(Message(session_id=session_uuid, role="user", content=body.text, is_pasted=body.pasted))
-    prev_question = state.current_question if state.step == "mcq_assessment" else None
-    was_ask_email_step = state.step == "ask_email"
-    state_snapshot = copy.deepcopy(state)
 
     result = handle_user_input(state, body.text)
     state = result.state
-
-    if was_ask_email_step and state.candidate.email:
-        candidate_row = get_candidate_or_404(db, session_row.candidate_id)
-        duplicate = (
-            db.query(Candidate)
-            .filter(
-                Candidate.org_id == candidate_row.org_id,
-                Candidate.email == state.candidate.email,
-                Candidate.id != session_row.candidate_id,
-            )
-            .first()
-        )        
-        if duplicate is not None:
-            state = state_snapshot
-            ACTIVE_SESSIONS[session_id] = state
-            msg = "That email is already registered with another screening. Please use a different email address."
-            db.add(Message(session_id=session_uuid, role="assistant", content=msg))
-            db.commit()
-            return MessageResponse(messages=[msg], step=state.step, candidate=vars(state.candidate))
 
     ACTIVE_SESSIONS[session_id] = state
 
@@ -314,23 +216,8 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
 
     _sync_candidate_row(db, session_row.candidate_id, state)
 
-    if prev_question:
-        q_row = (
-            db.query(GeneratedQuestion)
-            .filter_by(session_id=session_uuid, question_text=prev_question)
-            .first()
-        )
-        if q_row is not None:
-            q_row.answer_text = body.text
-            score = _score_answer(q_row.question_text, body.text, q_row.technology, state.candidate.experience)
-            q_row.correctness_score = score["correctness"]
-            q_row.reasoning_score = score["reasoning"]
-            q_row.communication_score = score["communication"]
-            q_row.score_justification = score["justification"]
-            db.commit()
 
     bot_messages = list(result.bot_messages)
-    state, bot_messages = _post_process_turn(state, session_uuid, db, session_row, bot_messages)
     ACTIVE_SESSIONS[session_id] = state
 
     return MessageResponse(
@@ -377,7 +264,7 @@ def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession
     db.commit()
 
     resume_text = _extract_resume_text(dest_path, ext)
-    extracted = _extract_resume_fields(resume_text)
+    extracted = _extract_resume_fields(resume_text, db, session_uuid)
     candidate_row.resume_text = resume_text
     state.pending_resume_data = extracted
     if not extracted:
@@ -516,6 +403,5 @@ def confirm_resume_data(session_id: str, body: ConfirmResumeRequest, db: SQLASes
     _sync_candidate_row(db, session_row.candidate_id, state)
 
     bot_messages = list(result.bot_messages)
-    state, bot_messages = _post_process_turn(state, session_uuid, db, session_row, bot_messages)
 
     return MessageResponse(messages=bot_messages, step=state.step, candidate=vars(state.candidate))

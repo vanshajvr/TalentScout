@@ -76,6 +76,18 @@ function showGeneratingPanel() {
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
+function showRedirectingPanel() {
+  const div = document.createElement("div");
+  div.className = "gen-panel";
+  div.id = "typing-indicator";
+  div.innerHTML = `
+    <div class="label">Redirecting to your technical assessment…</div>
+    <div class="gen-track"><div class="gen-fill"></div></div>
+  `;
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
 function showExtractingPanel() {
   const div = document.createElement("div");
   div.className = "gen-panel";
@@ -88,7 +100,7 @@ function showExtractingPanel() {
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
-function showResumeConfirmCard(extracted, sessionData) {
+function showResumeConfirmCard(extracted) {
   const div = document.createElement("div");
   div.className = "bubble bot";
   div.style.maxWidth = "90%";
@@ -185,7 +197,11 @@ function showResumeConfirmCard(extracted, sessionData) {
         });
         setInputEnabled(false); // stay in card-editing mode, not free text
       } else if (data.step === "mcq_assessment") {
-        window.location.href = `/static/mcq/mcq.html?session_id=${sessionId}`;
+        setInputEnabled(false);
+        showRedirectingPanel();
+        setTimeout(() => {
+          window.location.href = `/static/mcq/mcq.html?session_id=${sessionId}`;
+        }, 1800); // deliberate pause so the message is actually readable, not a flash
       } else {
         setInputEnabled(true);
       }
@@ -342,7 +358,7 @@ resumeInput.addEventListener("change", async () => {
   addBubble("user", `📎 ${file.name}`);
   setInputEnabled(false);
   uploadTrigger.disabled = true;
-  showExtractingPanel();;
+  showExtractingPanel();
   const formData = new FormData();
   formData.append("file", file);
   try {
