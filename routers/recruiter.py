@@ -162,6 +162,29 @@ def get_me(authorization: str = Header(None), db: SQLASession = Depends(get_db))
         raise HTTPException(status_code=401, detail="Account not found")
     return {"name": recruiter.name, "email": recruiter.email, "role": recruiter.role}
 
+ABANDONED_AFTER_HOURS = 48
+
+
+def _sweep_stale_sessions(db: SQLASession, org_id) -> None:
+    """Lazily corrects any in_progress session that's gone quiet for 48+ hours to
+    "abandoned" — a candidate who just closes the tab (never types an exit keyword,
+    never finishes) would otherwise sit as "in_progress" forever, inflating that stat
+    indefinitely. Called at the top of the recruiter-facing read endpoints, so the DB
+    self-corrects for real whenever someone actually looks, rather than needing a
+    separate background job. A flat 48h-since-started_at check is accurate enough
+    here — this screening flow takes at most 20-40 minutes even fully engaged, so the
+    gap between "started" and "actually went quiet" is dwarfed by the 48h window."""
+    threshold = datetime.utcnow() - timedelta(hours=ABANDONED_AFTER_HOURS)
+    db.query(SessionModel).filter(
+        SessionModel.status == "in_progress",
+        SessionModel.started_at < threshold,
+        SessionModel.candidate_id.in_(
+            db.query(Candidate.id).filter(Candidate.org_id == org_id)
+        ),
+    ).update({"status": "abandoned"}, synchronize_session=False)
+    db.commit()
+
+
 def _candidate_query(db, org_id, role, tech, min_experience, status):
     q = db.query(Candidate, SessionModel).join(SessionModel, SessionModel.candidate_id == Candidate.id)
     q = q.filter(Candidate.org_id == org_id)
@@ -184,6 +207,7 @@ def list_candidates(
     db: SQLASession = Depends(get_db),
     recruiter: Recruiter = Depends(require_recruiter),
 ):
+    _sweep_stale_sessions(db, recruiter.org_id)
     rows = _candidate_query(db, recruiter.org_id, role, tech, min_experience, status)
     return [
         {
@@ -199,6 +223,7 @@ def list_candidates(
 
 @router.get("/overview")
 def overview(db: SQLASession = Depends(get_db), recruiter: Recruiter = Depends(require_recruiter)):
+    _sweep_stale_sessions(db, recruiter.org_id)
     total = db.query(Candidate).filter(Candidate.org_id == recruiter.org_id).count()
     in_progress = (
         db.query(SessionModel).join(Candidate)
@@ -208,13 +233,20 @@ def overview(db: SQLASession = Depends(get_db), recruiter: Recruiter = Depends(r
         db.query(SessionModel).join(Candidate)
         .filter(Candidate.org_id == recruiter.org_id, SessionModel.status == "completed").count()
     )
+    abandoned = (
+        db.query(SessionModel).join(Candidate)
+        .filter(Candidate.org_id == recruiter.org_id, SessionModel.status == "abandoned").count()
+    )
     experiences = [
     c.experience for c in db.query(Candidate)
     .filter(Candidate.org_id == recruiter.org_id, Candidate.experience.isnot(None)).all()
     if c.experience is not None
     ]   
     avg_experience = round(sum(experiences) / len(experiences), 1) if experiences else None
-    return {"total_candidates": total, "in_progress": in_progress, "completed": completed, "avg_experience": avg_experience}
+    return {
+        "total_candidates": total, "in_progress": in_progress, "completed": completed,
+        "abandoned": abandoned, "avg_experience": avg_experience,
+    }
 
 
 @router.get("/candidates/{candidate_id}/questions")

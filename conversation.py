@@ -75,6 +75,9 @@ def get_bot_message(state: ConversationState) -> str:
 class StepResult:
     state: ConversationState
     bot_messages: list[str]
+    exited_early: bool = False  # True when this turn ended via an exit keyword, not a
+                                  # genuine completion — lets the caller record "abandoned"
+                                  # instead of "completed" when the step becomes "end"
 
 
 def _build_interview_plan(tech_stack: list[str]) -> list[str]:
@@ -90,7 +93,7 @@ def handle_user_input(state: ConversationState, user_input: str) -> StepResult:
     if user_input_clean in EXIT_KEYWORDS:
         state.step = "end"
         bot_messages.append(get_bot_message(state))
-        return StepResult(state=state, bot_messages=bot_messages)
+        return StepResult(state=state, bot_messages=bot_messages, exited_early=True)
 
     if seems_uncertain(user_input) and state.step != "mcq_assessment":
         bot_messages.append(

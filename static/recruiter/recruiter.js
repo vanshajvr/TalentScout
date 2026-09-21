@@ -88,6 +88,7 @@ async function loadOverview() {
     <div class="stat-card"><div class="stat-value">${data.total_candidates}</div><div class="stat-label">Total candidates</div></div>
     <div class="stat-card"><div class="stat-value">${data.in_progress}</div><div class="stat-label">In progress</div></div>
     <div class="stat-card"><div class="stat-value">${data.completed}</div><div class="stat-label">Completed</div></div>
+    <div class="stat-card"><div class="stat-value">${data.abandoned}</div><div class="stat-label">Abandoned</div></div>
     <div class="stat-card"><div class="stat-value">${data.avg_experience ?? "—"}</div><div class="stat-label">Avg. experience (yrs)</div></div>
   `;
 }

@@ -44,7 +44,7 @@ class Session(Base):
     )
     candidate_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("candidates.id", ondelete="CASCADE"))
     current_step: Mapped[str] = mapped_column(String(50))
-    status: Mapped[str] = mapped_column(String(20), default="in_progress")
+    status: Mapped[str] = mapped_column(String(20), default="in_progress")  # in_progress | completed | abandoned
     started_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
 

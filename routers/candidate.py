@@ -149,17 +149,16 @@ def _log_event(db: SQLASession, session_uuid: uuid.UUID, event_type: str, detail
     db.add(SessionLog(session_id=session_uuid, event_type=event_type, detail=detail))
     db.commit()
 
-def _mark_step(db: SQLASession, session_uuid: uuid.UUID, session_row: SessionModel, new_step: str):
+def _mark_step(db: SQLASession, session_uuid: uuid.UUID, session_row: SessionModel, new_step: str, exited_early: bool = False):
     """Advances session_row.current_step, logging the transition, and — if the new step
-    is the final one — marks the session completed. Previously current_step/status were
-    updated inline at each of the three call sites with no completion tracking at all,
-    so status stayed "in_progress" forever and completed_at was never set."""
+    is the final one — marks the session completed (or abandoned, if this "end" was
+    reached via an exit keyword rather than a genuine finish)."""
     if session_row.current_step != new_step:
         _log_event(db, session_uuid, "step_transition", f"{session_row.current_step} -> {new_step}")
     session_row.current_step = new_step
-    if new_step == "end" and session_row.status != "completed":
-        session_row.status = "completed"
-        session_row.completed_at = datetime.utcnow()
+    if new_step == "end" and session_row.status not in ("completed", "abandoned"):
+        session_row.status = "abandoned" if exited_early else "completed"
+        session_row.completed_at = datetime.utcnow()  # "session ended" timestamp either way — used for duration math regardless of how it ended
     db.commit()
 
 def _format_history(qa_history: list[tuple[str, str]]) -> str:
@@ -311,7 +310,7 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
     for msg in result.bot_messages:
         db.add(Message(session_id=session_uuid, role="assistant", content=msg))
 
-    _mark_step(db, session_uuid, session_row, state.step)
+    _mark_step(db, session_uuid, session_row, state.step, exited_early=result.exited_early)
 
     _sync_candidate_row(db, session_row.candidate_id, state)
 
@@ -512,7 +511,7 @@ def confirm_resume_data(session_id: str, body: ConfirmResumeRequest, db: SQLASes
     for msg in result.bot_messages:
         db.add(Message(session_id=session_uuid, role="assistant", content=msg))
 
-    _mark_step(db, session_uuid, session_row, state.step)
+    _mark_step(db, session_uuid, session_row, state.step, exited_early=result.exited_early)
     
     _sync_candidate_row(db, session_row.candidate_id, state)
 
