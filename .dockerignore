@@ -6,3 +6,7 @@ __pycache__
 .gitignore
 *.md
 uploads/
+.env.test
+tests/
+.pytest_cache
+requirements-dev.txt
