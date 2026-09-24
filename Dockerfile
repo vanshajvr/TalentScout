@@ -7,6 +7,15 @@ FROM python:3.11-slim
 RUN useradd --create-home --shell /bin/bash appuser
 
 WORKDIR /app
+# COPY --chown below only sets ownership on the files it copies, not on this
+# directory itself — WORKDIR creates /app as root, so without this it stays
+# root:root (mode 755), and appuser (as "other") has no write permission on
+# it. That broke os.makedirs() for the uploads/ directory at import time,
+# since uploads/ is .dockerignore'd and so doesn't exist as a pre-owned
+# directory after COPY — appuser had nowhere it could create it. Verified
+# with a real unprivileged user: permission denied before this line, works
+# after it.
+RUN chown appuser:appuser /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
