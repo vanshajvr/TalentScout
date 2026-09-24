@@ -12,6 +12,8 @@ Run manually: python seed_mcq_pool.py
 from dotenv import load_dotenv
 load_dotenv()
 
+import os
+
 from db.database import SessionLocal
 from db.models import MCQQuestion
 from llm.groq_llm import GroqLLM
@@ -24,9 +26,12 @@ TECHNOLOGIES = MCQ_SEEDED_TECHNOLOGIES + ["General Programming"]
 
 QUESTIONS_PER_BUCKET = 10  # evenly distributed across the 5 formats
 
+# This script lives at the project root itself, so its own directory IS the root.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 
 def _load_prompt(path: str) -> str:
-    with open(path, "r") as f:
+    with open(os.path.join(BASE_DIR, path), "r") as f:
         return f.read()
 
 

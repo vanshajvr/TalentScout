@@ -12,10 +12,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, SessionLog, Organization
+from db.models import Candidate, Session as SessionModel, Message, SessionLog, Organization
 from conversation import ConversationState, handle_user_input, get_bot_message
 from llm.groq_llm import GroqLLM
-from utils.constants import BEHAVIORAL_QUESTION_TEMPLATES, MCQ_SEEDED_TECHNOLOGIES
+from utils.constants import MCQ_SEEDED_TECHNOLOGIES
 from utils.validators import is_valid_email, is_valid_phone, is_valid_experience
 from utils.rate_limit import check_rate_limit
 from deps import get_candidate_or_404, get_session_or_404
@@ -23,7 +23,14 @@ from deps import get_candidate_or_404, get_session_or_404
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-UPLOAD_DIR = "uploads"
+# Anchored to the project root (one level up from routers/), not the process's current
+# working directory — relative paths here previously only worked because the Dockerfile
+# happens to set WORKDIR /app, which is an implicit, easy-to-break assumption (a local
+# test run, a different startup mechanism, or a future Docker config change could all
+# silently break it with a confusing FileNotFoundError).
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 MAX_RESUME_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB — generous for a resume, rejects egregious uploads
@@ -106,7 +113,7 @@ def _extract_resume_fields(resume_text: str, db: SQLASession, session_uuid: uuid
         return {}
     
 def _load_prompt(path: str) -> str:
-    with open(path, "r") as f:
+    with open(os.path.join(BASE_DIR, path), "r") as f:
         return f.read()
 
 

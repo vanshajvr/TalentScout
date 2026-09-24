@@ -1,12 +1,7 @@
 from dataclasses import dataclass, field
 
-from utils.constants import STEPS, EXIT_KEYWORDS, MAX_TECHNICAL_QUESTIONS
-from utils.validators import (
-    is_valid_name,
-    is_valid_email,
-    is_valid_phone,
-    is_valid_experience,
-)
+from utils.constants import STEPS, EXIT_KEYWORDS
+from utils.validators import is_valid_name
 
 
 @dataclass

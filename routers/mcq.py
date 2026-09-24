@@ -9,11 +9,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Session as SessionModel, MCQAssessment, MCQAnswer, MCQQuestion
+from db.models import MCQAssessment, MCQAnswer, MCQQuestion
 from deps import get_session_or_404, get_candidate_or_404
 from utils.constants import (
-    MCQ_TECHNICAL_COUNT, MCQ_BEHAVIORAL_COUNT, MCQ_OPEN_TEXT_COUNT, MCQ_TOTAL_COUNT,
-    MCQ_TECHNICAL_TIME_LIMIT_SECONDS, MCQ_OPEN_TEXT_MAX_CHARS, MCQ_FORMATS, MCQ_DIFFICULTY_TIERS,
+    MCQ_TECHNICAL_COUNT, MCQ_BEHAVIORAL_COUNT, MCQ_TOTAL_COUNT,
+    MCQ_TECHNICAL_TIME_LIMIT_SECONDS, MCQ_OPEN_TEXT_MAX_CHARS, MCQ_DIFFICULTY_TIERS,
     BEHAVIORAL_QUESTION_TEMPLATES,
 )
 from routers.candidate import _difficulty_tier, _load_prompt, _mark_step, _log_event
