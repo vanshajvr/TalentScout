@@ -16,6 +16,10 @@ html, body {
   font-family: "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
   background: var(--bg); color: var(--text);
 }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
 body { display: flex; padding: 0; }
 .logo-icon {
   width: 46px; height: 46px; border-radius: 12px; flex-shrink: 0;
@@ -105,17 +109,8 @@ textarea.pasted-flag { border-color: var(--warn); }
 }
 
 /* Landing page */
-.landing {
-  position: relative; min-height: 100vh; width: 100%;
-  display: grid; grid-template-columns: 1.15fr 0.85fr;
-  overflow: hidden;
-}
-.landing-left { padding: 64px 72px; display: flex; flex-direction: column; justify-content: center; }
-.landing-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
-.landing-brand-name { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
 .landing-title { font-size: 68px; line-height: 1.02; font-weight: 700; letter-spacing: -0.03em; color: var(--text); margin: 0 0 18px; }
 .landing-sub { font-size: 18px; line-height: 1.6; color: var(--muted); max-width: 480px; margin: 0 0 36px; }
-.landing-ctas { display: flex; flex-direction: column; gap: 12px; max-width: 360px; margin-bottom: 48px; }
 .landing-btn {
   text-align: left; border-radius: 999px; padding: 19px 28px; font-size: 16.5px; font-weight: 600;
   cursor: pointer; text-decoration: none; display: block; transition: opacity .15s, transform .1s;
@@ -126,24 +121,6 @@ textarea.pasted-flag { border-color: var(--warn); }
 
 .landing-btn-primary:hover { background: #45403a; transform: translateY(-1px); box-shadow: 0 8px 20px rgba(46,42,36,0.18); }
 .landing-btn-secondary:hover { background: var(--bubble-bot); border-color: var(--accent); transform: translateY(-1px); }
-
-.landing-features { display: flex; gap: 28px; flex-wrap: wrap; max-width: 560px; }
-.feature { flex: 1; min-width: 150px; }
-.feature-title { font-weight: 600; font-size: 15px; margin-bottom: 6px; color: var(--text); }
-.feature-copy { font-size: 13.5px; color: var(--muted); line-height: 1.55; }
-
-.landing-right { position: relative; background: var(--bubble-bot); border-left: 1px solid var(--border); }
-.landing-shape { position: absolute; border-radius: 50%; transform: translate(-50%, -50%); }
-.landing-float-card {
-  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-2deg);
-  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
-  padding: 16px 18px; width: 200px; box-shadow: 0 16px 36px rgba(60,45,25,0.14);
-  z-index: 2;
-}
-.landing-float-step { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
-.landing-float-track { height: 4px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
-.landing-float-fill { height: 100%; width: 46%; background: var(--accent); border-radius: 4px; }
-.landing-float-question { font-size: 13px; color: var(--text); line-height: 1.4; }
 
 .home-shell { display: flex; align-items: center; justify-content: center; }
 .home-content { text-align: left; padding: 40px 56px; max-width: 480px; }
@@ -209,20 +186,24 @@ button:disabled {
 
 .landing-new { width: 100%; min-height: 100vh; }
 
-.landing-nav {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 20px 48px; border-bottom: 0.5px solid var(--border);
-}
+/* Shared content width so nav/hero/timeline/roles/footer all align to the same
+   left/right edges regardless of viewport width, instead of some sections
+   stretching edge-to-edge while others sit capped-and-left-aligned. */
+.landing-container-inner { max-width: 1120px; margin: 0 auto; width: 100%; }
+
+.landing-nav { border-bottom: 0.5px solid var(--border); }
+.landing-nav-inner { display: flex; align-items: center; justify-content: space-between; padding: 20px 48px; }
 .landing-nav-brand { display: flex; align-items: center; gap: 10px; }
 .landing-nav-name { font-size: 15px; font-weight: 700; color: var(--text); }
 .landing-nav-links { display: flex; align-items: center; gap: 24px; }
-.landing-nav-link { font-size: 13px; color: var(--muted); }
+.landing-nav-link { font-size: 13px; color: var(--muted); text-decoration: none; }
+.landing-nav-link:hover { color: var(--text); }
 .landing-nav-cta { padding: 9px 18px; font-size: 13px; }
 
-.landing-hero {
+.landing-hero { border-bottom: 0.5px solid var(--border); }
+.landing-hero-inner {
   display: grid; grid-template-columns: 1.2fr 1fr; gap: 48px;
-  padding: 64px 48px; border-bottom: 0.5px solid var(--border);
-  align-items: center;
+  padding: 64px 48px; align-items: center;
 }
 .landing-hero-text .landing-title { font-size: 52px; margin-bottom: 16px; }
 .landing-hero-text .landing-sub { max-width: 380px; margin-bottom: 28px; }
@@ -240,7 +221,7 @@ button:disabled {
   color: var(--muted); margin-bottom: 24px;
 }
 
-.landing-timeline-section { padding: 72px 48px 96px; max-width: 960px; }
+.landing-timeline-section { padding: 72px 48px 96px; max-width: 1120px; margin: 0 auto; }
 
 .rail-layout { display: grid; grid-template-columns: 28px 1fr; gap: 32px; }
 
@@ -279,7 +260,7 @@ button:disabled {
 }
 
 
-.landing-roles-section { padding: 0 48px 72px; }
+.landing-roles-section { padding: 0 48px 72px; max-width: 1120px; margin: 0 auto; }
 .landing-role-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
 .role-card {
   background: var(--panel); border: 0.5px solid var(--border); border-radius: 12px; padding: 22px;
@@ -291,17 +272,19 @@ button:disabled {
 .role-card-copy { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
 
 .landing-footer {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 18px 48px; border-top: 0.5px solid var(--border); background: var(--bubble-bot);
+  border-top: 0.5px solid var(--border); background: var(--bubble-bot);
   font-size: 12px; color: var(--muted);
 }
+.landing-footer-inner { display: flex; align-items: center; justify-content: space-between; padding: 18px 48px; }
 
 @media (max-width: 780px) {
-  .landing-hero, .landing-nav-links span:not(.landing-nav-cta), .landing-role-grid {
+  .landing-hero-inner, .landing-role-grid {
     grid-template-columns: 1fr;
   }
-  .landing-hero { padding: 32px 20px; }
+  .landing-hero-inner { padding: 32px 20px; }
 }
+
+.back-link { background: none; border: none; padding: 0; font-size: 13px; color: var(--muted); cursor: pointer; font-family: inherit; }
 
 .tier-select { width: 100vw; height: 100vh; display: grid; grid-template-columns: 0.9fr 1.1fr; }
 
@@ -313,8 +296,6 @@ button:disabled {
 .tier-panel-features { display: flex; flex-direction: column; gap: 18px; }
 .tier-panel-feature { display: flex; align-items: center; gap: 12px; font-size: 14.5px; color: var(--text); font-weight: 500; }
 .tier-panel-feature i { color: var(--accent); font-size: 19px; }
-
-.back-link { background: none; border: none; padding: 0; font-size: 13px; color: var(--muted); cursor: pointer; font-family: inherit; }
 
 .tier-options { padding: 64px 72px; display: flex; flex-direction: column; gap: 24px; justify-content: center; max-width: 680px; margin: 0 auto; width: 100%; }
 .tier-card { background: var(--panel); border: 0.5px solid var(--border); border-radius: 18px; padding: 32px 36px; display: flex; align-items: center; gap: 22px; cursor: pointer; text-align: left; font-family: inherit; transition: border-color 0.15s, transform 0.1s; }
@@ -342,11 +323,6 @@ button:disabled {
 }
 @keyframes blink { 50% { opacity: 0; } }
 
-.preview-bubble { padding: 10px 14px; border-radius: 14px; font-size: 13px; max-width: 80%; }
-.preview-bubble-bot { align-self: flex-start; background: var(--panel); color: var(--text); border-bottom-left-radius: 4px; }
-.preview-bubble-user { align-self: flex-end; background: var(--accent); color: #fdf3ee; border-bottom-right-radius: 4px; }
-
-
 .role-card { cursor: pointer; text-align: left; font-family: inherit; transition: border-color 0.2s, transform 0.15s; }
 .role-card.active { border-color: var(--accent); border-width: 2px; }
 
@@ -354,7 +330,9 @@ button:disabled {
 .preview-mock { background: var(--bubble-bot); border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 10px; max-width: 480px; }
 .preview-table { gap: 8px; }
 .preview-row { display: flex; justify-content: space-between; background: var(--panel); border-radius: 8px; padding: 10px 16px; font-size: 13.5px; color: var(--text); }
+.preview-row-selected { border: 1.5px solid var(--accent); color: var(--accent); font-weight: 600; }
 .preview-score { font-weight: 600; color: var(--accent); }
+.preview-mcq-question { font-size: 13.5px; color: var(--text); font-weight: 500; margin-bottom: 4px; }
 .preview-org-row { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--text); }
 .preview-org-row i { color: var(--accent); font-size: 16px; }
 

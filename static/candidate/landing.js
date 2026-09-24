@@ -110,8 +110,10 @@ if (railSteps.length) {
 const ROLE_PREVIEWS = {
   candidates: `
     <div class="preview-mock">
-      <div class="preview-bubble preview-bubble-bot">What draws you to backend engineering?</div>
-      <div class="preview-bubble preview-bubble-user">I like systems where correctness matters.</div>
+      <div class="preview-mcq-question">Which fixes a race condition on this shared counter?</div>
+      <div class="preview-row">Read it twice and compare</div>
+      <div class="preview-row preview-row-selected">Wrap the read-modify-write in a mutex</div>
+      <div class="preview-row">Retry on conflict, no locking</div>
     </div>
   `,
   recruiters: `

@@ -14,29 +14,33 @@
 
 <div id="landing-view" class="landing-new">
   <nav class="landing-nav">
-    <div class="landing-nav-brand">
-      <div class="logo-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#fdf3ee" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"></circle><line x1="15.2" y1="15.2" x2="20" y2="20"></line></svg>
+    <div class="landing-container-inner landing-nav-inner">
+      <div class="landing-nav-brand">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fdf3ee" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"></circle><line x1="15.2" y1="15.2" x2="20" y2="20"></line></svg>
+        </div>
+        <span class="landing-nav-name">TalentScout</span>
       </div>
-      <span class="landing-nav-name">TalentScout</span>
-    </div>
-    <div class="landing-nav-links">
-      <span class="landing-nav-link">Product</span>
-      <span class="landing-nav-link">For teams</span>
-      <a href="/login" class="landing-btn landing-btn-primary landing-nav-cta">Get started</a>
+      <div class="landing-nav-links">
+        <a href="#how-it-works" class="landing-nav-link">Product</a>
+        <a href="#roles" class="landing-nav-link">For teams</a>
+        <a href="/login" class="landing-btn landing-btn-primary landing-nav-cta">Get started</a>
+      </div>
     </div>
   </nav>
 
   <section class="landing-hero">
-    <div class="landing-hero-text">
-      <h1 class="landing-title">Screening,<br>done with care.</h1>
-      <p class="landing-sub">Adaptive interviewing, rubric-based scoring, and org-based team management for hiring teams of any size.</p>
-      <a href="/login" class="landing-btn landing-btn-primary">Get started →</a>
+    <div class="landing-container-inner landing-hero-inner">
+      <div class="landing-hero-text">
+        <h1 class="landing-title">Screening,<br>done with care.</h1>
+        <p class="landing-sub">Adaptive interviewing, rubric-based scoring, and org-based team management for hiring teams of any size.</p>
+        <a href="/login" class="landing-btn landing-btn-primary">Get started →</a>
+      </div>
+      <div class="landing-hero-demo" id="demo-preview"></div>
     </div>
-    <div class="landing-hero-demo" id="demo-preview"></div>
   </section>
 
-  <section class="landing-timeline-section">
+  <section class="landing-timeline-section" id="how-it-works">
     <div class="landing-eyebrow">How it works</div>
     <div class="rail-layout">
       <div class="rail-track">
@@ -81,7 +85,7 @@
     </div>
   </section>
 
-  <section class="landing-roles-section">
+  <section class="landing-roles-section" id="roles">
     <div class="landing-eyebrow">Built for every role</div>
     <div class="landing-role-grid">
       <button class="role-card reveal active" data-role="candidates">
@@ -104,8 +108,10 @@
   </section>
 
   <footer class="landing-footer">
-    <span>TalentScout</span>
-    <span>Privacy · Terms</span>
+    <div class="landing-container-inner landing-footer-inner">
+      <span>TalentScout</span>
+      <span>Privacy · Terms</span>
+    </div>
   </footer>
 </div>
 
