@@ -1,5 +1,6 @@
 const API = "";
 let token = localStorage.getItem("admin_token") || null;
+let myRecruiterId = null;
 
 const loginView = document.getElementById("login-view");
 const dashView = document.getElementById("dash-view");
@@ -50,6 +51,7 @@ async function authedFetch(url, options = {}) {
 async function showDashboard() {
   const meRes = await authedFetch(`${API}/recruiter/me`);
   const me = await meRes.json();
+  myRecruiterId = me.id;
 
   if (me.role !== "admin") {
     localStorage.removeItem("admin_token");
@@ -103,13 +105,19 @@ async function loadTeam() {
   rows.forEach((r) => {
     const tr = document.createElement("tr");
     const otherRole = r.role === "admin" ? "recruiter" : "admin";
+    const isMe = r.id === myRecruiterId;
     tr.innerHTML = `
       <td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.email)}</td>
       <td><span class="badge ${r.role === "admin" ? "completed" : "in_progress"}">${escapeHtml(r.role)}</span></td>
       <td>${r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</td>
       <td style="display:flex; gap:6px;">
-        <button class="role-btn" data-id="${r.id}" data-role="${otherRole}" style="font-size:12px; padding:5px 10px;">Make ${otherRole}</button>
-        <button class="remove-btn" data-id="${r.id}" style="background:var(--warn); color:white; border:none; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer;">Remove</button>
+        ${isMe
+          ? '<span style="font-size:12px; color:var(--muted);">This is you</span>'
+          : `
+            <button class="role-btn" data-id="${r.id}" data-role="${otherRole}" style="font-size:12px; padding:5px 10px;">Make ${otherRole}</button>
+            <button class="remove-btn" data-id="${r.id}" style="background:var(--warn); color:white; border:none; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer;">Remove</button>
+          `
+        }
       </td>
     `;
     teamBody.appendChild(tr);

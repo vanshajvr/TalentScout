@@ -199,16 +199,17 @@ def update_recruiter_role(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid recruiter_id")
 
+    if target_id == admin.id:
+        # Changing your own role — especially demoting yourself — immediately
+        # revokes your own session with no warning. Matches the same
+        # unconditional block already used for self-removal below: this isn't
+        # something to allow with a warning, it's disabled outright. An admin
+        # who wants to step down needs another admin to do it for them.
+        raise HTTPException(status_code=400, detail="You can't change your own role")
+
     target = db.get(Recruiter, target_id)
     if target is None or target.org_id != admin.org_id:
         raise HTTPException(status_code=404, detail="Recruiter not found")
-
-    if target.id == admin.id and body.new_role == "recruiter":
-        remaining_admins = db.query(Recruiter).filter(
-            Recruiter.org_id == admin.org_id, Recruiter.role == "admin", Recruiter.id != target.id
-        ).count()
-        if remaining_admins == 0:
-            raise HTTPException(status_code=400, detail="Can't demote the last admin in this org")
 
     target.role = body.new_role
     db.commit()

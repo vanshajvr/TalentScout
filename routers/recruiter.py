@@ -9,9 +9,8 @@ from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session as SQLASession
 
-import db
 from db.database import get_db
-from db.models import Candidate, Session as SessionModel, Message, GeneratedQuestion, Recruiter, SessionLog, InviteToken, Organization, MCQAssessment, MCQAnswer, MCQQuestion, RecruiterSession
+from db.models import Candidate, Session as SessionModel, GeneratedQuestion, Recruiter, SessionLog, InviteToken, Organization, MCQAssessment, MCQAnswer, MCQQuestion, RecruiterSession
 
 from utils.validators import is_valid_email
 from utils.auth import (
@@ -160,7 +159,7 @@ def get_me(authorization: str = Header(None), db: SQLASession = Depends(get_db))
     recruiter = db.get(Recruiter, uuid.UUID(recruiter_id))
     if recruiter is None:
         raise HTTPException(status_code=401, detail="Account not found")
-    return {"name": recruiter.name, "email": recruiter.email, "role": recruiter.role}
+    return {"id": str(recruiter.id), "name": recruiter.name, "email": recruiter.email, "role": recruiter.role}
 
 ABANDONED_AFTER_HOURS = 48
 
