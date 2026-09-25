@@ -74,6 +74,12 @@ document.getElementById("org-error-retry")?.addEventListener("click", () => {
   showView("org-entry-view");
 });
 
+document.getElementById("org-entry-back")?.addEventListener("click", () => {
+  // goToLanding() lives in app.js, loaded after this file — safe to reference
+  // here since it's only called from a click, well after both scripts have run.
+  goToLanding();
+});
+
 const params = new URLSearchParams(window.location.search);
 if (window.CURRENT_ORG_SLUG) {
   // A real /screen/{slug} link — fetch the org's name before showing anything,

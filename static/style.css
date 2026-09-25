@@ -316,6 +316,14 @@ button:disabled {
 }
 
 .back-link { background: none; border: none; padding: 0; font-size: 13px; color: var(--muted); cursor: pointer; font-family: inherit; }
+.back-corner-btn {
+  position: fixed; top: 20px; left: 20px; z-index: 30;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--panel); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text); font-size: 16px; padding: 0;
+}
+.back-corner-btn:hover { background: var(--bubble-bot); }
 
 .tier-select { width: 100vw; height: 100vh; display: grid; grid-template-columns: 0.9fr 1.1fr; }
 
