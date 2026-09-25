@@ -280,18 +280,13 @@ responsesSelect.addEventListener("change", () => {
   loadCandidateQuestions(responsesSelect.value);
 });
 
-document.getElementById("logout-btn").addEventListener("click", async () => {
-  try {
-    await fetch(`${API}/recruiter/logout`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-    });
-  } catch (e) {
-    // Best-effort — still log out locally even if this call fails (e.g. offline).
-  }
-  localStorage.removeItem("recruiter_token");
-  token = null;
-  window.location.href = "/login";
+wireProfileDropdown({
+  getToken: () => token,
+  onLogout: () => {
+    localStorage.removeItem("recruiter_token");
+    token = null;
+    window.location.href = "/login";
+  },
 });
 
 document.getElementById("show-signup").addEventListener("click", (e) => {

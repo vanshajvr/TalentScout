@@ -352,7 +352,7 @@ button:disabled {
 .dash-header { display: flex; align-items: center; justify-content: space-between; }
 .dash-org-name { font-size: 18px; font-weight: 700; color: var(--text); }
 .dash-page-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.dash-user-block { display: flex; align-items: center; gap: 10px; }
+.dash-user-block { display: flex; align-items: center; gap: 10px; position: relative; cursor: pointer; }
 .dash-user-info { text-align: right; }
 .dash-user-name { font-size: 13px; font-weight: 500; color: var(--text); }
 .dash-user-email { font-size: 11px; color: var(--muted); }
@@ -362,6 +362,35 @@ button:disabled {
   font-size: 13px; font-weight: 600; color: var(--accent);
 }
 .dash-role-badge { background: var(--accent); color: #fdf3ee; font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 999px; text-transform: capitalize; }
+
+.profile-dropdown {
+  position: absolute; top: calc(100% + 10px); right: 0; z-index: 20;
+  background: var(--panel); border: 0.5px solid var(--border); border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(46,42,36,0.14); min-width: 190px; padding: 6px;
+}
+.profile-dropdown-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  background: none; border: none; border-radius: 8px; padding: 10px 12px;
+  font-family: inherit; font-size: 13.5px; color: var(--text); cursor: pointer;
+}
+.profile-dropdown-item:hover { background: var(--bubble-bot); }
+.profile-dropdown-item.danger { color: var(--warn); }
+.profile-dropdown-item i { font-size: 16px; color: var(--muted); }
+.profile-dropdown-item.danger i { color: var(--warn); }
+.profile-dropdown-divider { height: 1px; background: var(--border); margin: 5px 4px; }
+
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(46,42,36,0.32);
+  display: flex; align-items: center; justify-content: center; z-index: 50;
+}
+.modal-box {
+  background: var(--panel); border-radius: 16px; padding: 28px; width: 100%;
+  max-width: 380px; box-shadow: 0 24px 60px rgba(46,42,36,0.22);
+}
+.modal-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 18px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+.modal-actions .landing-btn { flex: 1; text-align: center; padding: 12px 18px; font-size: 14px; }
+.modal-btn-secondary { background: var(--bubble-bot); color: var(--text); }
 
 .screening-link-card {
   background: var(--panel); border: 0.5px solid var(--border); border-radius: 14px;

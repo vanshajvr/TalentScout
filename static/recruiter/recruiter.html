@@ -63,7 +63,6 @@
       <button class="rec-nav-item" data-tab="candidates">Candidates</button>
       <button class="rec-nav-item" data-tab="responses">Interview Responses</button>
       <button class="rec-nav-item" data-tab="logs">Session Logs</button>
-      <button id="logout-btn" class="back-link" style="margin-top:auto; margin-bottom:8px;">Log out</button>
     </div>
   </div>
 
@@ -81,6 +80,24 @@
           </div>
           <div class="dash-avatar" id="dash-avatar"></div>
           <span class="dash-role-badge" id="dash-role-badge"></span>
+          <div class="profile-dropdown" id="profile-dropdown" style="display:none;">
+            <button class="profile-dropdown-item" id="change-password-btn"><i class="ti ti-key"></i> Change password</button>
+            <div class="profile-dropdown-divider"></div>
+            <button class="profile-dropdown-item danger" id="logout-btn"><i class="ti ti-logout"></i> Log out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="change-password-modal" style="display:none;">
+      <div class="modal-box">
+        <div class="modal-title">Change password</div>
+        <input type="password" id="cp-current" placeholder="Current password">
+        <input type="password" id="cp-new" placeholder="New password (min. 8 characters)">
+        <div id="cp-error" class="error-text" style="display:none;"></div>
+        <div class="modal-actions">
+          <button class="landing-btn modal-btn-secondary" id="cp-cancel">Cancel</button>
+          <button class="landing-btn landing-btn-primary" id="cp-submit">Save</button>
         </div>
       </div>
     </div>

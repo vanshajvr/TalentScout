@@ -161,6 +161,37 @@ def get_me(authorization: str = Header(None), db: SQLASession = Depends(get_db))
         raise HTTPException(status_code=401, detail="Account not found")
     return {"id": str(recruiter.id), "name": recruiter.name, "email": recruiter.email, "role": recruiter.role}
 
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+@router.post("/change-password")
+def change_password(
+    body: ChangePasswordRequest,
+    db: SQLASession = Depends(get_db),
+    recruiter: Recruiter = Depends(require_recruiter),
+):
+    is_valid, _ = verify_password(body.current_password, recruiter.password_hash, recruiter.password_salt)
+    if not is_valid:
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+    recruiter.password_hash = hash_password(body.new_password)
+    recruiter.password_salt = None  # the new hash is always argon2, no legacy salt needed
+
+    # Close every active session for this account, including the one making this
+    # request — a password change is often prompted by a suspicion the account was
+    # compromised, and leaving old tokens valid would defeat the point. The
+    # frontend handles this by redirecting to login right after a successful change.
+    db.query(RecruiterSession).filter(
+        RecruiterSession.recruiter_id == recruiter.id,
+        RecruiterSession.ended_at.is_(None),
+    ).update({"ended_at": datetime.utcnow(), "end_reason": "password_changed"}, synchronize_session=False)
+
+    db.commit()
+    return {"status": "ok"}
+
 ABANDONED_AFTER_HOURS = 48
 
 
