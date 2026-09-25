@@ -65,6 +65,10 @@ body { display: flex; padding: 0; }
   background: var(--bubble-bot); border-right: 1px solid var(--border);
   padding: 28px 22px; display: flex; flex-direction: column; overflow-y: auto;
 }
+/* Only home-view/chat-view have the fixed .back-corner-btn overlapping the top-left
+   corner — admin/recruiter sidebars share this same base class but have their own
+   different nav, so this extra clearance must stay scoped to just these two. */
+#home-view .sidebar, #chat-view .sidebar { padding-top: 76px; }
 .sidebar-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 32px; }
 .sidebar-brand-name { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
 .sidebar-brand-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
