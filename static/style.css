@@ -40,16 +40,26 @@ body { display: flex; padding: 0; }
   display: flex; align-items: center; justify-content: center;
   background: var(--panel);
 }
-.entry-card {
-  max-width: 420px; width: 100%; text-align: left; padding: 36px 40px;
+.card-surface {
   background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
   box-shadow: 0 12px 32px rgba(46,42,36,0.08);
+}
+.entry-card {
+  max-width: 420px; width: 100%; text-align: left; padding: 36px 40px;
 }
 .entry-card-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; font-size: 15px; font-weight: 700; color: var(--text); }
 .entry-input {
   width: 100%; padding: 12px 14px; margin-bottom: 14px;
   background: #fdf9f2; color: var(--text); border: 1px solid var(--border); border-radius: 8px;
   font-family: inherit; font-size: 14px;
+}
+.step-preview { display: flex; flex-direction: column; gap: 2px; margin-bottom: 28px; }
+.step-preview-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.step-preview-row span { font-size: 13.5px; color: var(--text); }
+.step-preview-icon {
+  width: 30px; height: 30px; border-radius: 8px; background: var(--bubble-bot);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  font-size: 15px; color: var(--accent);
 }
 .sidebar {
   background: var(--bubble-bot); border-right: 1px solid var(--border);
