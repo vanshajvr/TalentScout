@@ -333,6 +333,10 @@ function goToLanding() {
     document.getElementById("chat-view").style.display = "none";
     document.getElementById("home-view").classList.remove("view-fade-in");
     document.getElementById("chat-view").classList.remove("view-fade-in");
+    const orgEntry = document.getElementById("org-entry-view");
+    const orgError = document.getElementById("org-error-view");
+    if (orgEntry) orgEntry.style.display = "none";
+    if (orgError) orgError.style.display = "none";
     const landing = document.getElementById("landing-view");
     landing.classList.remove("view-fade-out", "hidden");
     landing.style.display = "grid";

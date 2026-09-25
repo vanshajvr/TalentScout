@@ -168,6 +168,16 @@ def _mark_step(db: SQLASession, session_uuid: uuid.UUID, session_row: SessionMod
     db.commit()
         
 
+@router.get("/organizations/{slug}")
+def get_organization_public(slug: str, db: SQLASession = Depends(get_db)):
+    """Public, unauthenticated — candidates aren't logged in when they need this.
+    Deliberately scoped to just the name, nothing else about the org."""
+    org = db.query(Organization).filter(Organization.slug == slug).first()
+    if org is None:
+        raise HTTPException(status_code=404, detail="Unknown organization")
+    return {"name": org.name}
+
+
 @router.post("/sessions", response_model=StartSessionResponse)
 def start_session(request: Request, org: str = "default", db: SQLASession = Depends(get_db)):
     ip = request.client.host if request.client else None

@@ -9,14 +9,81 @@ const revealObserver = new IntersectionObserver((entries) => {
 
 document.querySelectorAll(".reveal").forEach((el) => revealObserver.observe(el));
 
-const params = new URLSearchParams(window.location.search);
-if (params.get("start") === "true") {
-  const landing = document.getElementById("landing-view");
-  const home = document.getElementById("home-view");
-  if (landing && home) {
-    landing.style.display = "none";
-    home.style.display = "grid";
+function getOrgSlugFromPath() {
+  const match = window.location.pathname.match(/^\/screen\/([a-z0-9-]+)$/);
+  return match ? match[1] : null;
+}
+
+window.CURRENT_ORG_SLUG = getOrgSlugFromPath();
+
+function showView(id) {
+  const views = {
+    "landing-view": "",   // reverts to its CSS default (block-level), not grid/flex
+    "org-entry-view": "flex",
+    "org-error-view": "flex",
+    "home-view": "grid",
+    "chat-view": "grid",
+  };
+  Object.keys(views).forEach((viewId) => {
+    const el = document.getElementById(viewId);
+    if (el) el.style.display = viewId === id ? views[viewId] : "none";
+  });
+}
+
+function applyOrgBranding(orgName) {
+  document.querySelectorAll(".sidebar-brand-sub").forEach((el) => {
+    el.textContent = `Screening for ${orgName}`;
+    el.style.display = "block";
+  });
+  const mainSub = document.getElementById("main-sub-line");
+  if (mainSub) mainSub.textContent = `Screening for ${orgName}`;
+}
+
+async function goToOrgSlug(slug) {
+  try {
+    const res = await fetch(`/organizations/${slug}`);
+    if (!res.ok) throw new Error("not found");
+    const data = await res.json();
+    applyOrgBranding(data.name);
+    showView("home-view");
+  } catch (e) {
+    showView("org-error-view");
   }
+}
+
+function parseOrgInput(raw) {
+  const trimmed = raw.trim();
+  const urlMatch = trimmed.match(/\/screen\/([a-z0-9-]+)/i);
+  if (urlMatch) return urlMatch[1].toLowerCase();
+  return trimmed.toLowerCase().replace(/[^a-z0-9-]/g, "");
+}
+
+document.getElementById("org-entry-submit")?.addEventListener("click", () => {
+  const input = document.getElementById("org-entry-input");
+  const errorEl = document.getElementById("org-entry-error");
+  const slug = parseOrgInput(input.value);
+  if (!slug) {
+    errorEl.textContent = "Please enter a screening link or org code.";
+    errorEl.style.display = "block";
+    return;
+  }
+  window.location.href = `/screen/${slug}`;
+});
+
+document.getElementById("org-error-retry")?.addEventListener("click", () => {
+  showView("org-entry-view");
+});
+
+const params = new URLSearchParams(window.location.search);
+if (window.CURRENT_ORG_SLUG) {
+  // A real /screen/{slug} link — fetch the org's name before showing anything,
+  // so an invalid link shows a clear error immediately rather than letting the
+  // candidate proceed into a flow that will only fail later.
+  goToOrgSlug(window.CURRENT_ORG_SLUG);
+} else if (params.get("start") === "true") {
+  // The generic "Candidate" entry with no org context at all — prompt for a
+  // real screening link instead of starting a session with nowhere to go.
+  showView("org-entry-view");
 }
 
 const DEMO_SCRIPT = [
@@ -25,24 +92,6 @@ const DEMO_SCRIPT = [
   { role: "bot", text: "Makes sense — what's a bug you're proud of catching?" },
   { role: "user", text: "A silent state bug that only hit on the first request." },
 ];
-
-function getOrgSlugFromPath() {
-  const match = window.location.pathname.match(/^\/screen\/([a-z0-9-]+)$/);
-  return match ? match[1] : null;
-}
-
-window.CURRENT_ORG_SLUG = getOrgSlugFromPath();
-
-if (window.CURRENT_ORG_SLUG) {
-  const landing = document.getElementById("landing-view");
-  const home = document.getElementById("home-view");
-  if (landing && home) {
-    landing.style.display = "none";
-    home.style.display = "grid";
-  }
-}
-
-window.CURRENT_ORG_SLUG = getOrgSlugFromPath();
 
 async function typeText(el, text, speed = 22) {
   el.textContent = "";
