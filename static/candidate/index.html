@@ -116,17 +116,29 @@
 </div>
 
 <div id="org-entry-view" class="full-shell" style="display:none;">
-  <div class="home-content">
+  <div class="entry-card">
+    <div class="entry-card-brand">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fdf3ee" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"></circle><line x1="15.2" y1="15.2" x2="20" y2="20"></line></svg>
+      </div>
+      <span>TalentScout</span>
+    </div>
     <div class="home-title">Enter your screening link</div>
     <p class="home-copy">Paste the link or code your recruiter shared with you.</p>
-    <input type="text" id="org-entry-input" placeholder="Screening link or org code" style="margin-bottom:12px;">
+    <input type="text" id="org-entry-input" class="entry-input" placeholder="Screening link or org code">
     <div id="org-entry-error" class="error-text" style="display:none;"></div>
     <button class="landing-btn landing-btn-primary" id="org-entry-submit" style="display:inline-block;">Continue →</button>
   </div>
 </div>
 
 <div id="org-error-view" class="full-shell" style="display:none;">
-  <div class="home-content">
+  <div class="entry-card">
+    <div class="entry-card-brand">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fdf3ee" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"></circle><line x1="15.2" y1="15.2" x2="20" y2="20"></line></svg>
+      </div>
+      <span>TalentScout</span>
+    </div>
     <div class="home-title">This screening link isn't valid</div>
     <p class="home-copy">Double-check the link your recruiter shared, or try entering it again.</p>
     <button class="landing-btn landing-btn-primary" id="org-error-retry" style="display:inline-block;">Try again →</button>
