@@ -11,8 +11,7 @@ import uuid
 
 from sqlalchemy.exc import IntegrityError
 
-from db.models import Candidate, Session as SessionModel, Organization
-
+from db.models import Candidate, CandidateSession, Organization
 
 def test_recruiter_cannot_fetch_another_orgs_candidate_by_id(client, signup_org, db_session):
     org_a_admin = signup_org()
@@ -44,7 +43,7 @@ def test_recruiter_candidate_list_excludes_other_orgs(client, signup_org, db_ses
     candidate_b = Candidate(org_id=org_b_row.id, name="Org B Candidate")
     db_session.add(candidate_b)
     db_session.flush()
-    db_session.add(SessionModel(candidate_id=candidate_b.id, current_step="greeting"))
+    db_session.add(CandidateSession(candidate_id=candidate_b.id, current_step="greeting"))
     db_session.commit()
 
     resp = client.get("/recruiter/candidates", headers={"Authorization": f"Bearer {org_a_admin['token']}"})
@@ -99,7 +98,7 @@ def test_new_candidate_created_via_org_slug_lands_in_correct_org(client, signup_
     assert resp.status_code == 200, resp.text
     session_id = resp.json()["session_id"]
 
-    session_row = db_session.query(SessionModel).filter(SessionModel.id == uuid.UUID(session_id)).first()
+    session_row = db_session.query(CandidateSession).filter(CandidateSession.id == uuid.UUID(session_id)).first()
     candidate_row = db_session.query(Candidate).filter(Candidate.id == session_row.candidate_id).first()
 
     assert candidate_row.org_id == org_a_row.id

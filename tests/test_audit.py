@@ -6,18 +6,35 @@ Filled in one test at a time — see conftest.py for shared fixtures
 (client, signup_org, invite_and_signup_recruiter, db_session).
 """
 
-import uuid
+from datetime import datetime, timedelta
 
-from db.models import RecruiterSession
+from db.models import RecruiterSession, InviteToken
 from utils.auth import hash_token
+from conftest import unique_email, auth_headers
 
 
 # --- Invite expiry ---
 
-def test_invite_expires_after_set_duration():
-    # TODO: create invite with expires_in_days, backdate its expires_at,
-    # then attempt redemption -> 403 "This invite code has expired".
-    pass
+def test_invite_expires_after_set_duration(client, signup_org, db_session):
+    admin = signup_org()
+
+    invite_resp = client.post(
+        "/admin/invite", json={"expires_in_days": 1}, headers=auth_headers(admin["token"])
+    )
+    assert invite_resp.status_code == 200, invite_resp.text
+    code = invite_resp.json()["code"]
+
+    # Backdate expires_at directly rather than waiting a real day.
+    token_row = db_session.query(InviteToken).filter(InviteToken.code == code).first()
+    token_row.expires_at = datetime.utcnow() - timedelta(seconds=1)
+    db_session.commit()
+
+    signup_resp = client.post("/recruiter/signup", json={
+        "name": "Late Recruiter", "email": unique_email("late"), "password": "correct-horse-1",
+        "invite_code": code,
+    })
+    assert signup_resp.status_code == 403
+    assert signup_resp.json()["detail"] == "This invite code has expired"
 
 
 def test_expired_unused_invite_excluded_from_pending_count():

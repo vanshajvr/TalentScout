@@ -10,8 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Candidate, Session as SessionModel, GeneratedQuestion, Recruiter, SessionLog, InviteToken, Organization, MCQAssessment, MCQAnswer, MCQQuestion, RecruiterSession
-
+from db.models import Candidate, CandidateSession, GeneratedQuestion, Recruiter, SessionLog, InviteToken, Organization, MCQAssessment, MCQAnswer, MCQQuestion, RecruiterSession
 from utils.validators import is_valid_email
 from utils.auth import (
     hash_password, verify_password, issue_token, require_recruiter, _resolve_token,
@@ -205,10 +204,10 @@ def _sweep_stale_sessions(db: SQLASession, org_id) -> None:
     here — this screening flow takes at most 20-40 minutes even fully engaged, so the
     gap between "started" and "actually went quiet" is dwarfed by the 48h window."""
     threshold = datetime.utcnow() - timedelta(hours=ABANDONED_AFTER_HOURS)
-    db.query(SessionModel).filter(
-        SessionModel.status == "in_progress",
-        SessionModel.started_at < threshold,
-        SessionModel.candidate_id.in_(
+    db.query(CandidateSession).filter(
+        CandidateSession.status == "in_progress",
+        CandidateSession.started_at < threshold,
+        CandidateSession.candidate_id.in_(
             db.query(Candidate.id).filter(Candidate.org_id == org_id)
         ),
     ).update({"status": "abandoned"}, synchronize_session=False)
@@ -216,14 +215,14 @@ def _sweep_stale_sessions(db: SQLASession, org_id) -> None:
 
 
 def _candidate_query(db, org_id, role, tech, min_experience, status):
-    q = db.query(Candidate, SessionModel).join(SessionModel, SessionModel.candidate_id == Candidate.id)
+    q = db.query(Candidate, CandidateSession).join(CandidateSession, CandidateSession.candidate_id == Candidate.id)
     q = q.filter(Candidate.org_id == org_id)
     if role:
         q = q.filter(Candidate.role.ilike(f"%{role}%"))
     if min_experience is not None:
         q = q.filter(Candidate.experience >= min_experience)
     if status:
-        q = q.filter(SessionModel.status == status)
+        q = q.filter(CandidateSession.status == status)
     results = q.all()
     if tech:
         results = [(c, s) for c, s in results if c.tech_stack and any(tech.lower() in t.lower() for t in c.tech_stack)]
@@ -256,16 +255,16 @@ def overview(db: SQLASession = Depends(get_db), recruiter: Recruiter = Depends(r
     _sweep_stale_sessions(db, recruiter.org_id)
     total = db.query(Candidate).filter(Candidate.org_id == recruiter.org_id).count()
     in_progress = (
-        db.query(SessionModel).join(Candidate)
-        .filter(Candidate.org_id == recruiter.org_id, SessionModel.status == "in_progress").count()
+        db.query(CandidateSession).join(Candidate)
+        .filter(Candidate.org_id == recruiter.org_id, CandidateSession.status == "in_progress").count()
     )
     completed = (
-        db.query(SessionModel).join(Candidate)
-        .filter(Candidate.org_id == recruiter.org_id, SessionModel.status == "completed").count()
+        db.query(CandidateSession).join(Candidate)
+        .filter(Candidate.org_id == recruiter.org_id, CandidateSession.status == "completed").count()
     )
     abandoned = (
-        db.query(SessionModel).join(Candidate)
-        .filter(Candidate.org_id == recruiter.org_id, SessionModel.status == "abandoned").count()
+        db.query(CandidateSession).join(Candidate)
+        .filter(Candidate.org_id == recruiter.org_id, CandidateSession.status == "abandoned").count()
     )
     experiences = [
     c.experience for c in db.query(Candidate)
@@ -292,7 +291,7 @@ def candidate_questions(
     if candidate_row is None or candidate_row.org_id != recruiter.org_id:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    session_row = db.query(SessionModel).filter(SessionModel.candidate_id == cid).order_by(SessionModel.started_at.desc()).first()
+    session_row = db.query(CandidateSession).filter(CandidateSession.candidate_id == cid).order_by(CandidateSession.started_at.desc()).first()
     if session_row is None:
         return {"assessment_type": "none", "legacy_questions": []}
 
@@ -434,7 +433,7 @@ def candidate_logs(
     candidate_row = db.get(Candidate, cid)
     if candidate_row is None or candidate_row.org_id != recruiter.org_id:
         raise HTTPException(status_code=404, detail="Candidate not found")
-    session_row = db.query(SessionModel).filter(SessionModel.candidate_id == cid).first()
+    session_row = db.query(CandidateSession).filter(CandidateSession.candidate_id == cid).first()
     if session_row is None:
         return []
     logs = db.query(SessionLog).filter(SessionLog.session_id == session_row.id).order_by(SessionLog.timestamp).all()
