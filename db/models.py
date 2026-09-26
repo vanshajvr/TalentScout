@@ -33,10 +33,10 @@ class Candidate(Base):
     github_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"))
 
-    sessions: Mapped[list["Session"]] = relationship(back_populates="candidate")
+    sessions: Mapped[list["CandidateSession"]] = relationship(back_populates="candidate")
 
 
-class Session(Base):
+class CandidateSession(Base):
     __tablename__ = "sessions"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -70,7 +70,7 @@ class GeneratedQuestion(Base):
     communication_score: Mapped[int | None] = mapped_column(nullable=True)
     score_justification: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    session: Mapped["Session"] = relationship(back_populates="questions")
+    session: Mapped["CandidateSession"] = relationship(back_populates="questions")
 
 class Message(Base):
     __tablename__ = "messages"
@@ -84,7 +84,7 @@ class Message(Base):
     is_pasted: Mapped[bool] = mapped_column(Boolean, default=False)
     timestamp: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
-    session: Mapped["Session"] = relationship(back_populates="messages")
+    session: Mapped["CandidateSession"] = relationship(back_populates="messages")
 
 class Recruiter(Base):
     __tablename__ = "recruiters"

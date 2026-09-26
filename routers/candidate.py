@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Candidate, Session as SessionModel, Message, SessionLog, Organization
+from db.models import Candidate, CandidateSession, Message, SessionLog, Organization
 from conversation import ConversationState, handle_user_input, get_bot_message
 from llm.groq_llm import GroqLLM
 from utils.constants import MCQ_SEEDED_TECHNOLOGIES
@@ -103,7 +103,7 @@ def _extract_resume_fields(resume_text: str, db: SQLASession, session_uuid: uuid
         canonical_technologies=", ".join(MCQ_SEEDED_TECHNOLOGIES),
     )
     try:
-        raw = llm.generate(prompt, temperature=0).strip()
+        raw = llm.generate(prompt, temperature=0, json_mode=True).strip()
         if raw.startswith("```"):
             raw = raw.strip("`").replace("json", "", 1).strip()
         return json.loads(raw)
@@ -155,7 +155,7 @@ def _log_event(db: SQLASession, session_uuid: uuid.UUID, event_type: str, detail
     db.add(SessionLog(session_id=session_uuid, event_type=event_type, detail=detail))
     db.commit()
 
-def _mark_step(db: SQLASession, session_uuid: uuid.UUID, session_row: SessionModel, new_step: str, exited_early: bool = False):
+def _mark_step(db: SQLASession, session_uuid: uuid.UUID, session_row: CandidateSession, new_step: str, exited_early: bool = False):
     """Advances session_row.current_step, logging the transition, and — if the new step
     is the final one — marks the session completed (or abandoned, if this "end" was
     reached via an exit keyword rather than a genuine finish)."""
@@ -191,7 +191,7 @@ def start_session(request: Request, org: str = "default", db: SQLASession = Depe
     db.add(candidate_row)
     db.flush()
 
-    session_row = SessionModel(candidate_id=candidate_row.id, current_step="greeting")
+    session_row = CandidateSession(candidate_id=candidate_row.id, current_step="greeting")
     db.add(session_row)
     db.commit()
     db.refresh(session_row)
@@ -356,7 +356,7 @@ def confirm_resume_data(session_id: str, body: ConfirmResumeRequest, db: SQLASes
             .first()
         )
         if duplicate is not None:
-            duplicate_session = db.query(SessionModel).filter(SessionModel.candidate_id == duplicate.id).first()
+            duplicate_session = db.query(CandidateSession).filter(CandidateSession.candidate_id == duplicate.id).first()
             duplicate_completed = duplicate_session is not None and duplicate_session.status == "completed"
 
             if duplicate_completed:
