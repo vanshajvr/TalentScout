@@ -244,4 +244,5 @@ wireProfileDropdown({
 });
 
 document.getElementById("back-link").addEventListener("click", goBackOrHome);
+document.getElementById("back-link-dash")?.addEventListener("click", goBackOrHome);
 if (token) showDashboard();

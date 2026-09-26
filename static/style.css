@@ -69,6 +69,10 @@ body { display: flex; padding: 0; }
    corner — admin/recruiter sidebars share this same base class but have their own
    different nav, so this extra clearance must stay scoped to just these two. */
 #home-view .sidebar, #chat-view .sidebar { padding-top: 76px; }
+/* recruiter.html's dashboard sidebar has this same back-corner-btn collision.
+   admin.html shares the same #dash-view ID with the same button now too, so
+   both dashboards get this consistently. */
+#dash-view .sidebar { padding-top: 76px; }
 .sidebar-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 32px; }
 .sidebar-brand-name { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
 .sidebar-brand-sub { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
