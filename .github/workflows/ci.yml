@@ -21,8 +21,6 @@ jobs:
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/talentscout_test
       # conftest.py refuses to run if this equals TEST_DATABASE_URL; nothing connects to it.
       DATABASE_URL: postgresql://unused:unused@localhost:5432/unused
-      # The app constructs its LLM client at import time; every test fakes the LLM itself.
-      GROQ_API_KEY: ci-placeholder
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

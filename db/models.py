@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, Text, Float, JSON, Boolean, UniqueConstraint
+from sqlalchemy import ForeignKey, String, Text, Float, JSON, Boolean, UniqueConstraint, LargeBinary
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -27,6 +27,8 @@ class Candidate(Base):
     tech_stack: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     resume_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Legacy: where resumes lived on local disk before they moved into resume_files.
+    # Only read as a download fallback for candidates from before that change.
     resume_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     resume_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     linkedin_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -42,7 +44,27 @@ class Candidate(Base):
     fit_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     fit_details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
-    sessions: Mapped[list["CandidateSession"]] = relationship(back_populates="candidate")
+    # passive_deletes: the database cascades these deletes (ON DELETE CASCADE).
+    # Without it, SQLAlchemy first tries to set each child's candidate_id to NULL,
+    # which the NOT NULL column rejects, so deleting any candidate with a session failed.
+    sessions: Mapped[list["CandidateSession"]] = relationship(back_populates="candidate", passive_deletes=True)
+
+
+class ResumeFile(Base):
+    """The uploaded resume itself. Kept in Postgres because the app's disk is wiped
+    on every deploy, and in its own table so candidate queries never load file bytes.
+    Deleting the candidate deletes the file (ON DELETE CASCADE)."""
+    __tablename__ = "resume_files"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    candidate_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("candidates.id", ondelete="CASCADE"), unique=True, index=True,
+    )
+    filename: Mapped[str] = mapped_column(String(255))
+    content_type: Mapped[str] = mapped_column(String(100))
+    size_bytes: Mapped[int] = mapped_column()
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    uploaded_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
 
 class JobOpening(Base):
@@ -79,8 +101,8 @@ class CandidateSession(Base):
     conversation_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     candidate: Mapped["Candidate"] = relationship(back_populates="sessions")
-    questions: Mapped[list["GeneratedQuestion"]] = relationship(back_populates="session")
-    messages: Mapped[list["Message"]] = relationship(back_populates="session")
+    questions: Mapped[list["GeneratedQuestion"]] = relationship(back_populates="session", passive_deletes=True)
+    messages: Mapped[list["Message"]] = relationship(back_populates="session", passive_deletes=True)
 
 
 class GeneratedQuestion(Base):

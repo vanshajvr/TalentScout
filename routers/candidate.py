@@ -8,33 +8,28 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Candidate, CandidateSession, Message, SessionLog, Organization, JobOpening
+from db.models import Candidate, CandidateSession, Message, SessionLog, Organization, JobOpening, ResumeFile
 from conversation import ConversationState, handle_user_input, get_bot_message, state_from_dict, state_to_dict
 from llm.groq_llm import GroqLLM
 from utils.validators import is_valid_email, is_valid_phone, is_valid_experience
 from utils.rate_limit import check_rate_limit
 from utils.job_match import apply_job_fit
-from utils.extraction import extract_resume_text, extract_resume_fields
+from utils.extraction import extract_resume_text_from_bytes, extract_resume_fields
 from deps import get_candidate_or_404, get_session_or_404, record_candidate_activity
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-# Anchored to the project root (one level up from routers/), not the process's current
-# working directory — relative paths here previously only worked because the Dockerfile
-# happens to set WORKDIR /app, which is an implicit, easy-to-break assumption (a local
-# test run, a different startup mechanism, or a future Docker config change could all
-# silently break it with a confusing FileNotFoundError).
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 MAX_RESUME_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB — generous for a resume, rejects egregious uploads
 
 RESUME_FILE_SIGNATURES = {
     ".pdf": b"%PDF-",
     ".docx": b"PK\x03\x04",  # docx is a zip archive under the hood
+}
+
+RESUME_CONTENT_TYPES = {
+    ".pdf": "application/pdf",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
 
 llm = GroqLLM()
@@ -266,17 +261,24 @@ def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession
     if not content.startswith(expected_signature):
         raise HTTPException(status_code=400, detail="File content doesn't match its extension")
 
-    safe_name = f"{session_uuid}{ext}"  # the parsed UUID, never the raw path segment
-    dest_path = os.path.join(UPLOAD_DIR, safe_name)
-    with open(dest_path, "wb") as f:
-        f.write(content)
-
+    # Stored in Postgres, not on local disk: the app's filesystem is wiped on every
+    # deploy, which used to break downloads for every earlier candidate.
     candidate_row = get_candidate_or_404(db, session_row.candidate_id)
-    candidate_row.resume_filename = file.filename
-    candidate_row.resume_path = dest_path
+    filename = (file.filename or f"resume{ext}")[:255]
+    resume_file = db.query(ResumeFile).filter(ResumeFile.candidate_id == candidate_row.id).first()
+    if resume_file is None:
+        resume_file = ResumeFile(candidate_id=candidate_row.id)
+        db.add(resume_file)
+    resume_file.filename = filename
+    resume_file.content_type = RESUME_CONTENT_TYPES[ext]
+    resume_file.size_bytes = len(content)
+    resume_file.data = content
+    resume_file.uploaded_at = datetime.utcnow()
+    candidate_row.resume_filename = filename
+    candidate_row.resume_path = None
     db.commit()
 
-    resume_text = extract_resume_text(dest_path, ext)
+    resume_text = extract_resume_text_from_bytes(content, ext)
     extracted = _extract_resume_fields(resume_text, db, session_uuid)
     candidate_row.resume_text = resume_text
     state.pending_resume_data = extracted

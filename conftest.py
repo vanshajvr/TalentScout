@@ -32,6 +32,9 @@ if TEST_DATABASE_URL == os.environ.get("DATABASE_URL"):
     )
 
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+# The app builds its Groq client at import time and needs some key to do it. Every
+# test fakes the LLM, so a placeholder is enough; a real key in .env still wins.
+os.environ.setdefault("GROQ_API_KEY", "test-placeholder")
 
 # Safe to import app modules now that DATABASE_URL points at the test branch.
 from fastapi.testclient import TestClient  # noqa: E402

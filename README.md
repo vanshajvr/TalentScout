@@ -1,11 +1,16 @@
 # TalentScout: AI Hiring Assistant
 
-A full-stack, multi-tenant AI-powered hiring platform. Organizations sign up,
-invite recruiters, and run first-round candidate screenings end-to-end:
-resume upload and parsing, an adaptive MCQ technical + behavioral assessment
-with server-authoritative timing and live difficulty adjustment, and a
-recruiter dashboard with a separate admin dashboard for team and org
-management.
+TalentScout runs the first round of a hiring process. A company signs up,
+invites its recruiters, and shares a screening link. Candidates upload a
+resume, confirm the details pulled from it, and take an adaptive assessment.
+Recruiters then get a ranked, explainable shortlist instead of a pile of
+resumes.
+
+AI is used where it saves people time: reading resumes and job descriptions,
+writing resume-specific questions, and grading short written answers. The
+decisions that need to be explainable, like fit scores and rankings, are made
+by plain, tested code. Every AI step is measured against labeled examples,
+and a recruiter can see and override what the AI produced.
 
 **Live demo:** https://talentscout-n2bb.onrender.com
 
@@ -13,235 +18,217 @@ management.
 
 ## Key Features
 
-**Candidate flow**
-- Conversational, chat-based intake for name/resume, resume upload drives
-  the rest of the flow, no multi-step form up front
-- Resume upload (PDF/DOCX) with LLM-based extraction of email, phone,
-  location, experience, role, tech stack, education, LinkedIn, and GitHub,
-  including data hidden behind PDF hyperlinks (e.g. a "Gmail" link label);
-  uploads are size-capped, content-validated against their claimed file
-  type, and page-limited before extraction
-- A single editable confirmation card for all extracted fields, so the
-  candidate corrects mistakes in one step instead of retyping everything.
-  A duplicate email against an abandoned prior attempt offers a real
-  choice — use a different email, or replace the old attempt — instead of
-  a silent, permanent lockout
-- A 17-question MCQ assessment: 10 technical questions sampled from a
-  curated, per-technology/per-difficulty question pool, 5 behavioral
-  questions generated fresh per candidate and grounded in their resume, and
-  2 open-text prompts
-- Technical difficulty adapts live — two correct answers in a row (at the
-  same difficulty tier) bump the next question up a level, two incorrect
-  drop it down, evaluated on non-overlapping pairs so a streak can't
-  double-count
-- Server-authoritative per-question timing (60s on technical questions),
-  auto-submits on timeout; tab-switch and fullscreen-exit events are logged
-  as integrity signals during the assessment, not silently ignored
-- A smooth, readable transition into the assessment rather than an instant
-  page jump
+### For candidates
 
-**Job openings & fit ranking**
-- Recruiters paste a job description; the LLM drafts must-have skills,
-  nice-to-have skills, and minimum experience, which the recruiter reviews
-  and edits before saving: the AI output is a draft, never the final word
-- Each job gets its own screening link (`/screen/{org}/jobs/{job_id}`);
-  closing a job stops new applications through it
-- Candidates are scored 0-100 against the job **deterministically**, not by
-  the LLM: must-haves 70%, nice-to-haves 20%, minimum experience 10%, with
-  only the groups a job actually specifies counting toward the total. Every
-  score comes with its reasons ("Meets 4/5 must-haves (missing Kubernetes) ·
-  2/3 nice-to-haves · 3 yrs vs 2 yrs required") and per-skill evidence
-  (found in the confirmed tech stack vs. the resume text)
-- Filtering the candidate table by job ranks candidates by fit; editing a
-  job's requirements re-scores everyone who applied to it
-- Technical questions for a job applicant are drawn from the job's skills,
-  not the candidate's resume: candidates are screened for the role they
-  applied to
+- A short chat-style intake. The candidate gives their name and uploads a
+  resume (PDF or DOCX), and the resume drives everything after that. There is
+  no long form to fill in.
+- The AI pulls out email, phone, location, experience, current role, tech
+  stack, education, LinkedIn and GitHub. That includes contact details that
+  only exist as links in the PDF, such as a "Gmail" label that links to an
+  address.
+- Everything extracted shows up on one editable card, so a mistake is fixed in
+  one place instead of by retyping. If the email matches an earlier
+  unfinished attempt, the candidate can choose to replace it rather than
+  being locked out.
+- A 17-question assessment:
+  - 10 technical questions from a reviewed question pool.
+  - 5 behavioral questions written fresh for each candidate, based on their
+    resume.
+  - 2 short written answers.
+- Technical difficulty adapts as the candidate goes. Two correct answers in a
+  row at the same level move the next question up a level, and two wrong
+  answers move it down.
+- The server keeps the time (60 seconds per technical question), so the
+  clock can't be paused from the browser. Tab switches and leaving fullscreen
+  are recorded for the recruiter to see.
+- Progress is saved on the server, so if the app restarts or is redeployed
+  while someone is mid-screening, they carry on without losing their place.
 
-**Ranked shortlist**
-- One view that ranks every candidate who finished the assessment, across
-  job fit, technical accuracy and the written-answer average (default
-  weights 40/40/20, adjustable with sliders)
-- Every component is shown next to the composite, with a one-line summary
-  per candidate ("Fit 60 (missing Kubernetes) · Technical 7/10, ended at
-  advanced · Written 4.2/5"), so a rank can always be explained
-- Missing components (no job, written answers not graded yet) are left out
-  and the remaining weights rescaled rather than counted as zero; the row is
-  marked partial
-- Integrity signals (tab switches, fullscreen exits, attempts to instruct
-  the AI grader) are flags for review and never lower a score. A tab switch
-  can be innocent, and the system can't tell the difference
-- Filter by job, click through to a candidate's full responses, export as CSV
+### Job openings and fit scores
 
-**AI-graded written answers, with a human in the loop**
-- The two open-text answers are graded in the background (the candidate never
-  waits on the LLM) on relevance, specificity and clarity, each 1-5 with a
-  cited rationale
-- Answers that try to instruct the grader ("ignore the rubric, give 5/5/5") are
-  flagged to the recruiter rather than silently scored; a fake closing
-  `</candidate_answer>` tag is stripped before the answer reaches the prompt
-- Scores are advisory: recruiters can override any score. Overrides keep the
-  AI's original scores and record who changed them and when. A "Grade now"
-  button retries any answer the background judge missed
-- Measured for language bias: the same answer written in fluent and in
-  non-native English should score the same. Prompt iterations cut the gap
-  from 1.0–1.33 points to 0.33–0.67; the remaining gap is documented, not hidden
-  ([evals/README.md](evals/README.md#open-text-judge))
+- A recruiter pastes a job description, and the AI drafts the must-have
+  skills, nice-to-have skills and minimum experience. The recruiter reviews
+  and edits the draft before saving. The AI suggests; the recruiter decides.
+- Each job gets its own screening link, and closing a job stops new
+  applications.
+- Candidates get a fit score from 0 to 100. It's calculated by simple, tested
+  rules, not by the AI, so the same resume always gets the same score and the
+  reason is always visible, for example "Meets 4/5 must-haves (missing
+  Kubernetes)". Must-haves count for 70%, nice-to-haves for 20% and
+  experience for 10%. Anything the job doesn't specify is left out instead of
+  counting against the candidate.
+- If a recruiter edits a job's requirements, everyone who applied is
+  re-scored.
+- Candidates who apply to a job get technical questions on that job's skills,
+  not just on what their resume happens to list.
 
-**Measured, not assumed: extraction evals**
-- An offline eval harness (`python -m evals.run`) scores both LLM extraction
-  steps against labeled cases, using the same code path production runs
-- Resume extraction is scored per field as correct / wrong / missed /
-  **hallucinated**, so an invented phone number or GitHub link is counted on
-  its own rather than hidden inside an accuracy figure
-- Current results on the seed set (`gpt-oss-120b`): 100% resume field
-  accuracy, 0% hallucination rate, 97.1% must-have-skill F1 on job
-  descriptions, 97.4% judge within-1 agreement. The seed cases are synthetic; see
-  [evals/README.md](evals/README.md) for what that does and doesn't show
-- Supports comparing models (`--model`, `--provider ollama`) and a CI gate
-  (`--fail-under`)
+### The ranked shortlist
 
-**Multi-tenant org model**
-- Organizations are isolated, one company's recruiters never see another
-  company's candidates
-- Three-tier access: **admin** (org owner: manages the team, generates
-  invites, promotes/demotes recruiters) and **recruiter** (reviews
-  candidates, assessment results, and scores within their own org)
-- Recruiter signup is gated behind an admin-generated, single-use invite
-  code — no open registration
-- Each org gets its own candidate-facing screening link
+- One view that ranks everyone who has finished the assessment, combining
+  fit, technical score and written answers. The default weights are 40/40/20,
+  and recruiters can adjust them with sliders.
+- Each candidate's individual scores sit next to their overall score, with a
+  one-line summary such as "Fit 60 (missing Kubernetes) · Technical 7/10,
+  ended at advanced · Written 4.2/5". Any rank can be explained.
+- If a score isn't available yet, for example written answers that are still
+  being graded, it's left out and the row is marked "partial", rather than
+  being counted as zero.
+- Integrity signals such as tab switches are shown as flags for a person to
+  review. They never lower a score, because a tab switch might just be a
+  notification or an accessibility tool, and the system can't tell which.
+- Filter by job, open any candidate's full answers, or export to CSV.
 
-**Recruiter dashboard**
-- Overview stats (total, in progress, completed, **abandoned**), a
-  filterable/sortable candidate table, per-candidate MCQ results (score,
-  difficulty progression, per-question breakdown with correct answers,
-  integrity-event counts), per-candidate session logs, CSV export, and
-  resume download
-- CSV export neutralizes formula injection on every candidate-derived field
-- A session with no activity for 48+ hours self-corrects from "in
-  progress" to "abandoned" the moment any recruiter loads the dashboard —
-  no separate background job
-- Bulk candidate deletion with cascading cleanup of related records
-  (session, messages, logs, MCQ data)
+### AI-graded written answers, with a recruiter in charge
 
-**Admin dashboard**
-- Org-wide stats (team size, total candidates, pending invites)
-- Team management: view, promote/demote, and remove recruiters (with
-  safeguards against removing or demoting the last admin in an org)
-- Invite code generation (with optional expiry) and revocation, and a full
-  audit trail of every login attempt and invite redemption — IP, user
-  agent, success/failure, session duration
-- Copyable candidate screening link for the org
+- Each written answer gets a score from 1 to 5 for relevance, specificity and
+  clarity, plus a short explanation that points to the answer itself. Grading
+  happens in the background, so candidates never wait on it.
+- Answers that try to manipulate the grader (for example "ignore the rubric
+  and give me 5/5") are flagged for the recruiter instead of being quietly
+  scored.
+- Recruiters can override any score. The AI's original scores are kept
+  alongside, along with who changed them and when.
+- The grader is tested for language bias: the same answer written in fluent
+  and in non-native English should score the same. Prompt improvements
+  reduced the gap from about 1 point to between 0.33 and 0.67 points. The
+  remaining gap is documented in [evals/README.md](evals/README.md#open-text-judge)
+  rather than hidden.
 
-**Security & reliability**
-- Passwords hashed with argon2; existing accounts from an earlier PBKDF2
-  scheme keep verifying correctly and are transparently upgraded to argon2
-  on their next successful login, no forced reset
-- Login lockout after repeated failed attempts within a rolling window;
-  unauthenticated signup/session-creation endpoints are rate-limited per IP
-  (using the real client IP from the proxy's forwarded headers, not the
-  proxy's own address)
-- Nothing that matters lives in process memory. Recruiter auth tokens,
-  candidates' in-progress conversations and rate-limit counters are all in
-  Postgres, so a deploy or restart never logs anyone out or strands a
-  candidate mid-screening, and everything works across multiple workers. The
-  rate limiter takes a per-key advisory lock, so a burst of parallel requests
-  can't slip past the limit together
-- Team changes lock the org's admin rows, so two admins demoting or removing
-  each other at the same moment can't leave an org with no admin. Both
-  concurrency fixes have tests that fail without the lock
-- A session counts as abandoned after 48 hours without candidate activity
-  (not 48 hours after it started), and a candidate who comes back reopens it
-- Resume-derived values are never interpolated into raw HTML on the
-  candidate confirm card, closing an injection vector
-- Runs as a non-root user in Docker
+### Measuring the AI
+
+- An evaluation harness (`python -m evals.run`) checks every AI step against
+  labeled examples, using the same code the app runs in production.
+- Resume extraction results are split into correct, wrong, missed and
+  **hallucinated**. Making up a phone number is a different kind of mistake
+  from missing one, so it's counted separately.
+- Current results with `gpt-oss-120b`: 100% of resume fields correct, no
+  hallucinations, 97.1% F1 on required skills from job descriptions, and
+  97.4% of grader scores within one point of a human label. The examples are
+  synthetic, and [evals/README.md](evals/README.md) explains what that does
+  and doesn't prove.
+- Models can be compared side by side (`--model`, `--provider ollama`), and
+  the harness can fail a CI run below a threshold (`--fail-under`).
+
+### Organizations and roles
+
+- Each organization's data is fully separate. Recruiters only ever see their
+  own organization's candidates, and this is enforced in every database
+  query, not just hidden in the interface.
+- Two staff roles. **Admins** manage the team, create invite codes and change
+  roles. **Recruiters** review candidates and results.
+- Recruiters can only sign up with a single-use invite code from an admin.
+- Each organization, and each job, gets its own screening link.
+
+### Recruiter and admin dashboards
+
+- Overview numbers: total candidates, in progress, completed and abandoned.
+- A filterable candidate table with resume downloads, full assessment
+  results, per-candidate activity logs, CSV export and bulk delete.
+- CSV exports are protected against spreadsheet formula injection.
+- A session counts as abandoned after 48 hours without activity. If the
+  candidate comes back, it reopens.
+- Admins can manage the team, create and revoke invite codes (optionally with
+  an expiry), and see an audit trail of every login attempt and invite use,
+  with IP address, browser, outcome and session length.
+- An organization can never end up without an admin, even if two admins try
+  to demote or remove each other at the same moment.
+
+### Security and reliability
+
+- Passwords are hashed with argon2. Accounts from an older PBKDF2 scheme still
+  work and are upgraded automatically on their next login, with no forced
+  reset.
+- Logins lock after repeated failures, and public endpoints like signup and
+  starting a screening are rate limited per visitor IP. Behind Render's
+  proxy, the visitor's real IP is read from the forwarded headers.
+- Nothing important lives only in server memory. Login sessions, candidates'
+  progress, rate limit counters and uploaded resumes are all stored in
+  Postgres, so a deploy or restart doesn't log anyone out, lose a candidate's
+  place, or lose files.
+- The two concurrency fixes (the admin lock and the rate limiter lock) each
+  have a test that fails without the fix.
+- Uploads are size-capped, checked against their real file type, and
+  page-limited before parsing.
+- Values taken from resumes are never inserted into the page as raw HTML.
+- The app runs as a non-root user, and its code is read-only to that user.
 
 ---
 
-## Architecture
+## How It's Built
 
 ```
-├── main.py               # FastAPI entrypoint, mounts routers/static
-├── conversation.py        # Deterministic state-machine conversation logic
-├── deps.py                # Shared DB dependency helpers
-├── create_tables.py       # Creates the schema on a brand-new database and stamps it for Alembic
-├── seed_mcq_pool.py       # Seeds the technical MCQ question pool via LLM
-├── alembic/               # Schema migrations (run automatically on container start)
-├── evals/                 # Offline LLM extraction evals: labeled datasets, metrics, runner
+├── main.py                # FastAPI app: routers and static files
+├── conversation.py        # The intake chat as a simple state machine
+├── deps.py                # Shared database helpers
+├── create_tables.py       # Sets up a brand-new database
+├── seed_mcq_pool.py       # Fills the technical question pool using the LLM
+├── alembic/               # Database migrations (run automatically on deploy)
+├── evals/                 # AI evaluation: labeled examples, scoring, runner
 ├── db/
-│   ├── database.py        # SQLAlchemy session/engine setup
-│   └── models.py          # Candidate, Session, Message, GeneratedQuestion,
-│                           # Recruiter, Organization, InviteToken, SessionLog,
-│                           # RecruiterSession, MCQQuestion, MCQAssessment, MCQAnswer
+│   ├── database.py        # Database connection
+│   └── models.py          # Tables: candidates, sessions, jobs, resumes,
+│                          # assessments, answers, recruiters, orgs, invites, audit
 ├── llm/
-│   ├── base.py             # LLM interface (provider-agnostic)
-│   ├── groq_llm.py         # Groq API implementation (active in production)
-│   └── ollama_llm.py       # Local Ollama implementation (offline fallback)
-├── prompts/
-│   ├── open_text_judge_prompt.txt
-│   ├── resume_extraction_prompt.txt
-│   ├── jd_extraction_prompt.txt
-│   ├── behavioral_mcq_prompt.txt
-│   └── technical_mcq_pool_prompt.txt
+│   ├── base.py            # Common LLM interface
+│   ├── groq_llm.py        # Groq (used in production)
+│   └── ollama_llm.py      # Ollama (local, offline)
+├── prompts/               # Every LLM prompt, as plain text files
 ├── routers/
-│   ├── candidate.py       # Session, messaging, resume upload/confirm endpoints
-│   ├── mcq.py              # MCQ assessment: serving, answering, integrity events
-│   ├── recruiter.py       # Auth, candidate listing, export, delete, org context
-│   ├── jobs.py            # Job openings: JD extraction, CRUD, fit re-scoring
-│   ├── shortlist.py       # Ranked shortlist across fit, technical and written scores
-│   └── admin.py           # Org signup, team management, invite codes
+│   ├── candidate.py       # Screening sessions, chat, resume upload
+│   ├── mcq.py             # Assessment: questions, answers, timing, integrity
+│   ├── recruiter.py       # Login, candidates, results, export, delete
+│   ├── jobs.py            # Job openings and job description parsing
+│   ├── shortlist.py       # The ranked shortlist
+│   └── admin.py           # Org signup, team, invites
 ├── utils/
-│   ├── auth.py             # Token issuance/validation, password hashing
-│   ├── rate_limit.py       # Postgres-backed sliding-window rate limiter
-│   ├── schemas.py          # Shared Pydantic response models
-│   ├── constants.py        # Conversation step order, MCQ config
-│   ├── validators.py       # Name/email/phone/experience validation
-│   ├── job_match.py        # Deterministic candidate-to-job fit scoring
-│   ├── extraction.py       # Resume/JD LLM extraction (shared by API routes and evals)
-│   ├── judge.py            # Open-text answer judge (shared by API routes and evals)
-│   └── shortlist.py        # Composite shortlist scoring
-└── static/
-    ├── candidate/          # Candidate-facing chat UI + landing page
-    ├── mcq/                 # MCQ assessment UI
-    ├── recruiter/           # Recruiter dashboard UI
-    ├── admin/                # Admin dashboard UI
-    ├── login/                # Role-select page (candidate/recruiter/admin)
-    ├── shared.js             # Shared frontend helpers (escaping, error formatting)
-    └── style.css
+│   ├── extraction.py      # Resume and job description extraction
+│   ├── judge.py           # Grading written answers
+│   ├── job_match.py       # Fit scores (rule-based)
+│   ├── shortlist.py       # Shortlist scoring (rule-based)
+│   ├── auth.py            # Tokens and password hashing
+│   ├── rate_limit.py      # Rate limiting, stored in Postgres
+│   └── ...                # Validation, constants, shared schemas
+├── tests/                 # pytest suite, also run in CI
+└── static/                # Plain HTML, CSS and JavaScript, no build step
 ```
 
-**Design highlights**
-- Deterministic state machine drives the candidate intake conversation; the
-  LLM is only used for resume-field extraction and behavioral-question
-  generation, never for control flow
-- LLM provider is swappable behind a single interface (`BaseLLM`)
-- Auth (token issuance, expiry, password hashing, role checks) lives in one
-  shared `utils/auth.py` module, imported by both the recruiter and admin
-  routers rather than duplicated
-- Org isolation is enforced at the query level, every candidate-facing
-  endpoint filters by the requesting recruiter's `org_id`, not just hidden
-  in the UI
-- Technical questions are shuffled per serving (never the pool's own stored
-  order) to avoid positional bias in the answer key
+**Design choices**
+
+- **The AI never controls the flow.** A simple state machine runs the
+  candidate chat. The AI only reads documents, writes behavioral questions
+  and grades written answers.
+- **Scores that decide rankings are rule-based.** Fit scores and the
+  shortlist are plain functions with unit tests, so every number can be
+  explained and reproduced.
+- **AI output is a suggestion.** Job requirements are a draft until a
+  recruiter saves them, and grader scores can be overridden.
+- **The LLM provider can be swapped.** Everything goes through one small
+  interface (`BaseLLM`).
+- **Technical answer options are shuffled every time a question is shown**, so
+  the position of the correct answer gives nothing away.
 
 ---
 
 ## Tech Stack
 
-- **Backend:** Python, FastAPI, SQLAlchemy, PostgreSQL (Neon)
-- **LLM:** Groq API (`openai/gpt-oss-120b`) in production; local Ollama
-  supported as an offline fallback
-- **Resume parsing:** `pdfplumber` (including PDF hyperlink extraction),
+- **Backend:** Python, FastAPI, SQLAlchemy, Alembic, PostgreSQL (Neon) with
+  psycopg 3
+- **AI:** Groq API (`openai/gpt-oss-120b`) in production, with local Ollama
+  supported
+- **Resume parsing:** `pdfplumber` (including links inside PDFs) and
   `python-docx`
-- **Frontend:** Vanilla HTML/CSS/JS, no framework, no build step
-- **Auth:** argon2 password hashing (with a dual-scheme verifier for any
-  legacy PBKDF2 accounts), bearer tokens backed by the database with a
-  12-hour expiry
-- **Deployment:** Render (app, Docker), Neon (managed Postgres)
+- **Frontend:** Plain HTML, CSS and JavaScript, with no framework and no build
+  step
+- **Auth:** argon2 password hashing, and database-backed login tokens that
+  expire after 12 hours
+- **Hosting:** Render (Docker) and Neon (managed Postgres)
+- **CI:** GitHub Actions runs the test suite and checks that the database
+  migrations match the models
 
 ---
 
-## Setup & Run Locally
+## Running It Locally
 
 ```bash
 git clone https://github.com/vanshajvr/TalentScout.git
@@ -252,101 +239,142 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Create a `.env` file (see `.env.example` for the full list):
+Copy `.env.example` to `.env` and fill in your values:
+
 ```
 DATABASE_URL=postgresql://user:password@host:5432/dbname
 GROQ_API_KEY=your_groq_api_key
 ```
 
+Set up the database. On a brand-new database:
 
-Create the schema on a brand-new database:
 ```bash
 python create_tables.py
 ```
 
-Already have a database? Apply any pending migrations instead (the Docker
-container also does this automatically every time it starts):
+On a database you already have, apply any pending migrations instead. The
+Docker container does this automatically every time it starts.
+
 ```bash
 alembic upgrade head
 ```
 
-After changing `db/models.py`, add a migration with
-`alembic revision --autogenerate -m "what changed"`, then review it. CI fails
-if the models and migrations disagree.
+Fill the technical question pool. This needs `GROQ_API_KEY`, and it's safe to
+run again because it skips anything already filled:
 
-Seed the technical MCQ question pool (requires `GROQ_API_KEY`, safe to
-re-run — skips buckets already at their target count):
 ```bash
 python seed_mcq_pool.py
 ```
 
-Run the app:
+Start the app:
+
 ```bash
 uvicorn main:app --reload
 ```
 
-Visit `http://127.0.0.1:8000` for the landing page, `/login` to pick a role,
-`/recruiter` for the recruiter dashboard, and `/admin` for the admin
-dashboard.
+Then open `http://127.0.0.1:8000`. Use `/login` to choose a role, or go
+straight to `/recruiter` or `/admin`.
 
-To run against local Ollama instead of Groq, swap the import in
-`routers/candidate.py` from `GroqLLM` to `OllamaLLM` and run
-`ollama pull llama3` first.
+To use a local model instead of Groq, run `ollama pull llama3`, then replace
+`GroqLLM` with `OllamaLLM` where the LLM is created in `routers/candidate.py`,
+`routers/mcq.py` and `routers/jobs.py`.
+
+### Running the tests
+
+The tests need their own disposable Postgres database. Put its address in a
+`.env.test` file:
+
+```
+TEST_DATABASE_URL=postgresql://postgres:password@localhost:5432/talentscout_test
+```
+
+Then run:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+The tests refuse to run if `TEST_DATABASE_URL` matches `DATABASE_URL`, so
+they can't touch your real data by accident. The AI is replaced with a fake in
+every test, so no Groq API key is needed.
+
+### Changing the database schema
+
+After editing `db/models.py`, create a migration and read through it before
+committing:
+
+```bash
+alembic revision --autogenerate -m "describe the change"
+```
+
+CI rebuilds the database from the original schema, applies every migration,
+and fails if the result doesn't match the models.
 
 ---
 
 ## Known Limitations
 
-- Uploaded resumes are stored on local disk, not durable across redeploys
-  on platforms with ephemeral filesystems
-- No real email or phone verification, identity is self-reported and
-  unverified in this demo (an earlier version had OTP verification; it was
-  removed after repeated deliverability issues on free-tier hosting, in
-  favor of building out the org/RBAC and assessment features instead)
+- **Resumes are stored in Postgres.** That keeps them safe across deploys,
+  but they count toward the database's storage. Uploads are capped at 10 MB,
+  and a typical resume is 100 to 300 KB, so Neon's free tier holds a few
+  thousand. A larger deployment should move them to object storage such as
+  S3 or Cloudflare R2.
+- **The written-answer grader still slightly favors polished English.** The
+  gap is measured and documented, and it's the main reason grader scores can
+  always be overridden.
+- **The evaluation examples are synthetic**, and the grader's labels come from
+  one person. Real, consented resumes and recruiter-labeled answers would make
+  the numbers far more meaningful.
+- **A candidate who closes the browser tab mid-screening can't come back to
+  it.** Their progress is saved on the server, but the page doesn't yet
+  remember which session was theirs.
+- **There is no email or phone verification.** Candidate identity is
+  self-reported. An earlier version had one-time codes, but they were removed
+  after repeated delivery problems on free-tier hosting.
 
 ---
 
 ## Data Privacy
 
-This application stores real candidate and recruiter data: names, emails,
-phone numbers, resume contents, and assessment results in Postgres. It is
-not an anonymized or in-memory-only demo.
+TalentScout stores real candidate and recruiter information in Postgres:
+names, emails, phone numbers, resumes, and assessment results.
 
-- Recruiter signup requires an admin-issued, single-use invite code; there
-  is no open registration
-- Candidate data is isolated per organization; recruiters can only see
-  candidates within their own org
-- Passwords are never stored in plain text (argon2, with legacy PBKDF2
-  accounts transparently upgraded on next login)
-- `.env` and uploaded files are excluded from version control
-- **Not yet implemented:** an automatic data retention window, and a
-  candidate-initiated deletion path (currently deletion is recruiter/admin
-  only, via the dashboard)
+- Recruiters can only join with an invite code from their organization's
+  admin. There is no open registration.
+- Each organization's candidates are visible only to that organization.
+- Passwords are never stored in plain text.
+- Deleting a candidate deletes everything about them, including their resume
+  file.
+- `.env` files and any real evaluation data (files starting with `private_`)
+  are kept out of version control.
+- **Not built yet:** automatic deletion after a retention period, and a way
+  for candidates to request deletion themselves. Today, only recruiters and
+  admins can delete candidate data.
 
-## Human-in-the-Loop & Limitations
+## A Recruiter Makes the Decisions
 
-This tool assists a human recruiter — it runs the assessment and surfaces
-results, it does not itself reject or auto-disqualify any candidate. It has
-not undergone a bias or adverse-impact audit and is a portfolio/learning
-project, not a production hiring product. Automated employment screening is
-a regulated space in many jurisdictions (e.g. NYC Local Law 144, the EU AI
-Act), any real-world deployment of a tool like this would need a proper
-audit first.
+TalentScout helps a recruiter. It does not reject or disqualify anyone on its
+own. It's a portfolio project and has not had a formal bias or
+adverse-impact audit. Automated hiring tools are regulated in many places,
+for example New York City's Local Law 144 and the EU AI Act, so any real-world
+use of a tool like this would need a proper audit first.
 
 ---
 
-## Summary
+## About This Project
 
-Originally built as a Streamlit AI/ML internship assignment prototype,
-rebuilt into a full-stack, multi-tenant application demonstrating:
-- Resume parsing and structured LLM extraction
-- An adaptive assessment engine with server-authoritative timing and
-  live difficulty adjustment, not just a static quiz
-- Multi-tenant org isolation and role-based access control
-- Clean conversational state management independent of the LLM
-- Provider-agnostic LLM integration
-- A systematic security hardening pass: modern password hashing with a
-  zero-downtime migration path, rate limiting, injection protections, and
-  a database-backed auth/audit trail
-- A real, deployed product surface; candidate flow, recruiter dashboard,
-  and admin dashboard — not just a chatbot demo
+TalentScout started as a Streamlit prototype for an AI/ML internship
+assignment and was rebuilt as a full multi-tenant web application. It shows:
+
+- Structured information extraction with LLMs, measured with an evaluation
+  harness that separates hallucinations from ordinary mistakes
+- An LLM grader with a rubric, protection against manipulation, a bias check,
+  and human override
+- Rule-based scoring and ranking that recruiters can understand and trust
+- An adaptive assessment with server-side timing
+- Organization-level data isolation and role-based access
+- Production practices: database migrations, CI, concurrency-safe admin
+  actions and rate limits, and state that survives restarts
+- A complete, deployed product: candidate flow, recruiter dashboard and admin
+  dashboard

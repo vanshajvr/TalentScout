@@ -665,3 +665,6 @@ button:disabled {
 .muted-cell { color: var(--muted); }
 .flag-chip { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px; margin: 1px 4px 1px 0; background: #f5e3c8; color: #9a6a1f; white-space: nowrap; }
 .flag-chip.manipulation { background: #f5e2df; color: var(--accent); }
+
+.resume-link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 4px; }
+.resume-link:disabled { color: var(--muted); cursor: default; }

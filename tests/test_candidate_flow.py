@@ -27,7 +27,7 @@ def _org_slug(client, token):
 @pytest.fixture
 def fake_resume_extraction(monkeypatch):
     from routers import candidate
-    monkeypatch.setattr(candidate, "extract_resume_text", lambda path, ext: "Python developer, 3 years")
+    monkeypatch.setattr(candidate, "extract_resume_text_from_bytes", lambda content, ext: "Python developer, 3 years")
     monkeypatch.setattr(candidate, "_extract_resume_fields", lambda text, db, sid: {
         "email": f"cand+{uuid.uuid4().hex[:8]}@gmail.com", "phone": "+91 98765 43210", "location": "Pune",
         "experience": "3", "role": "Backend Engineer", "tech_stack": ["Python", "SQL"],
@@ -156,3 +156,33 @@ def test_rate_limit_holds_under_concurrent_requests():
     for t in threads:
         t.join(timeout=60)
     assert sorted(results) == [200] * 3 + [429] * 5
+
+
+def test_replacing_an_abandoned_attempt_deletes_it(client, signup_org, db_session, fake_resume_extraction):
+    # Same email as an earlier, unfinished attempt: the candidate chooses to replace
+    # it, which deletes the old candidate (and its session) through the ORM.
+    admin = signup_org()
+    slug = _org_slug(client, admin["token"])
+
+    def reach_confirm():
+        sid = client.post("/sessions", params={"org": slug}).json()["session_id"]
+        client.post(f"/sessions/{sid}/messages", json={"text": "hi"})
+        client.post(f"/sessions/{sid}/messages", json={"text": "Priya Raman"})
+        extracted = client.post(f"/sessions/{sid}/resume", files={"file": ("cv.pdf", b"%PDF-1.4 x", "application/pdf")}).json()["extracted"]
+        return sid, {**extracted, "email": "priya.repeat@gmail.com", "experience": "3"}
+
+    first_sid, body = reach_confirm()
+    first_candidate = db_session.get(CandidateSession, uuid.UUID(first_sid)).candidate_id
+    assert client.post(f"/sessions/{first_sid}/resume/confirm", json=body).json()["step"] == "mcq_assessment"
+    db_session.query(CandidateSession).filter(CandidateSession.id == uuid.UUID(first_sid)).update({"status": "abandoned"})
+    db_session.commit()
+
+    second_sid, body = reach_confirm()
+    offered = client.post(f"/sessions/{second_sid}/resume/confirm", json=body).json()
+    assert offered["duplicate_email_choice"] is True
+
+    resp = client.post(f"/sessions/{second_sid}/resume/confirm", json={**body, "replace_duplicate": True})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["step"] == "mcq_assessment"
+    db_session.expire_all()
+    assert db_session.get(Candidate, first_candidate) is None

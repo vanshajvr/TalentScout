@@ -5,13 +5,15 @@ import uuid
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Depends, Header, Request
-from fastapi.responses import StreamingResponse, FileResponse
+from urllib.parse import quote
+
+from fastapi.responses import StreamingResponse, FileResponse, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Candidate, CandidateSession, GeneratedQuestion, Recruiter, SessionLog, InviteToken, Organization, MCQAssessment, MCQAnswer, MCQQuestion, RecruiterSession, JobOpening
+from db.models import Candidate, CandidateSession, GeneratedQuestion, Recruiter, SessionLog, InviteToken, Organization, MCQAssessment, MCQAnswer, MCQQuestion, RecruiterSession, JobOpening, ResumeFile
 from utils.validators import is_valid_email
 from utils.auth import (
     hash_password, verify_password, issue_token, require_recruiter, _resolve_token,
@@ -538,9 +540,9 @@ def delete_candidates(
         candidate_row = db.get(Candidate, cid)
         if candidate_row is None or candidate_row.org_id != recruiter.org_id:
             continue
-        # Sessions, messages, generated questions, session logs, and any MCQ
-        # assessment/answers all cascade-delete at the DB level (see
-        # migrations/migrate_cascade_deletes.py) — no need to hand-delete each table here anymore.
+        # Sessions, messages, generated questions, session logs, MCQ data and the
+        # stored resume file all cascade-delete at the database level. Only a legacy
+        # on-disk resume (from before files moved into Postgres) needs removing here.
         if candidate_row.resume_path:
             try:
                 if os.path.exists(candidate_row.resume_path):
@@ -584,10 +586,23 @@ def download_resume(
     candidate_row = db.get(Candidate, cid)
     if candidate_row is None or candidate_row.org_id != recruiter.org_id:
         raise HTTPException(status_code=404, detail="Candidate not found")
-    if not candidate_row.resume_path or not os.path.exists(candidate_row.resume_path):
-        raise HTTPException(status_code=404, detail="No resume on file for this candidate")
-    return FileResponse(
-        candidate_row.resume_path,
-        filename=candidate_row.resume_filename or "resume",
-        media_type="application/octet-stream",
-    )
+
+    resume_file = db.query(ResumeFile).filter(ResumeFile.candidate_id == cid).first()
+    if resume_file is not None:
+        # RFC 5987 encoding, so a filename with quotes, non-ASCII characters or line
+        # breaks can't break out of the header.
+        return Response(
+            content=resume_file.data,
+            media_type=resume_file.content_type,
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(resume_file.filename)}"},
+        )
+
+    # Candidates from before resumes moved into Postgres. On hosts with an ephemeral
+    # disk these files are usually gone already, which is why they moved.
+    if candidate_row.resume_path and os.path.exists(candidate_row.resume_path):
+        return FileResponse(
+            candidate_row.resume_path,
+            filename=candidate_row.resume_filename or "resume",
+            media_type="application/octet-stream",
+        )
+    raise HTTPException(status_code=404, detail="No resume on file for this candidate")

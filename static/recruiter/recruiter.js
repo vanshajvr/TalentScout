@@ -135,11 +135,15 @@ async function loadCandidates() {
       <td>${c.experience ?? "—"}</td>
       <td>${escapeHtml(c.role) || "—"}</td>
       <td>${escapeHtml((c.tech_stack || []).join(", ")) || "—"}</td>
-      <td>${escapeHtml(c.resume_filename) || "—"}</td>
+      <td>${c.resume_filename ? `<button class="resume-link" data-id="${c.id}" data-filename="${escapeHtml(c.resume_filename)}"><i class="ti ti-download"></i> ${escapeHtml(c.resume_filename)}</button>` : "—"}</td>
       <td><span class="badge ${escapeHtml(c.status)}">${escapeHtml(c.status)}</span></td>
       <td>${c.created_at ? new Date(c.created_at).toLocaleDateString() : "—"}</td>
     `;
     candidatesBody.appendChild(tr);
+  });
+
+  document.querySelectorAll(".resume-link").forEach((btn) => {
+    btn.addEventListener("click", () => downloadResume(btn.dataset.id, btn.dataset.filename, btn));
   });
 
   document.querySelectorAll(".row-check").forEach((cb) => {
@@ -184,6 +188,26 @@ async function loadCandidateQuestions(candidateId) {
   const candidate = candidatesById.get(candidateId);
   if (candidate && candidate.fit_summary) {
     responsesList.prepend(renderFitCard(candidate));
+  }
+}
+
+// Downloads go through authedFetch (not a plain link) because the endpoint needs the
+// recruiter's bearer token, which a normal <a href> navigation can't send.
+async function downloadResume(candidateId, filename, btn) {
+  btn.disabled = true;
+  try {
+    const res = await authedFetch(`${API}/recruiter/candidates/${candidateId}/resume`);
+    if (!res.ok) {
+      alert(formatError(await res.json().catch(() => ({}))));
+      return;
+    }
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(await res.blob());
+    link.download = filename || "resume";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 10000);  // revoking immediately can cancel the download
+  } finally {
+    btn.disabled = false;
   }
 }
 

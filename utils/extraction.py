@@ -6,6 +6,7 @@ parse failure — callers decide what a failure means (a logged fallback in the
 candidate flow, a 502 for recruiters, a scored failure in evals).
 """
 
+import io
 import os
 from datetime import date
 
@@ -31,9 +32,19 @@ def load_prompt(path: str) -> str:
 
 
 def extract_resume_text(file_path: str, ext: str) -> str:
+    """File-path wrapper, used by the eval harness. Also accepts .txt for eval cases."""
+    if ext == ".txt":
+        with open(file_path, "r") as f:
+            return f.read()
+    with open(file_path, "rb") as f:
+        return extract_resume_text_from_bytes(f.read(), ext)
+
+
+def extract_resume_text_from_bytes(content: bytes, ext: str) -> str:
+    """Works on the uploaded bytes directly, so a resume never has to touch disk."""
     if ext == ".pdf":
         text_parts = []
-        with pdfplumber.open(file_path) as pdf:
+        with pdfplumber.open(io.BytesIO(content)) as pdf:
             for page in pdf.pages[:MAX_RESUME_PDF_PAGES]:
                 page_text = page.extract_text()
                 if page_text:
@@ -44,11 +55,8 @@ def extract_resume_text(file_path: str, ext: str) -> str:
                         text_parts.append(f"[link: {uri}]")
         return "\n".join(text_parts)
     elif ext == ".docx":
-        doc = DocxDocument(file_path)
+        doc = DocxDocument(io.BytesIO(content))
         return "\n".join(p.text for p in doc.paragraphs)
-    elif ext == ".txt":
-        with open(file_path, "r") as f:
-            return f.read()
     return ""
 
 
