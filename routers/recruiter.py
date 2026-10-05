@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Candidate, CandidateSession, GeneratedQuestion, Recruiter, SessionLog, InviteToken, Organization, MCQAssessment, MCQAnswer, MCQQuestion, RecruiterSession
+from db.models import Candidate, CandidateSession, GeneratedQuestion, Recruiter, SessionLog, InviteToken, Organization, MCQAssessment, MCQAnswer, MCQQuestion, RecruiterSession, JobOpening
 from utils.validators import is_valid_email
 from utils.auth import (
     hash_password, verify_password, issue_token, require_recruiter, _resolve_token,
@@ -214,9 +214,19 @@ def _sweep_stale_sessions(db: SQLASession, org_id) -> None:
     db.commit()
 
 
-def _candidate_query(db, org_id, role, tech, min_experience, status):
+def _candidate_query(db, org_id, role, tech, min_experience, status, job_id=None):
     q = db.query(Candidate, CandidateSession).join(CandidateSession, CandidateSession.candidate_id == Candidate.id)
     q = q.filter(Candidate.org_id == org_id)
+    if job_id == "none":
+        q = q.filter(Candidate.job_id.is_(None))
+    elif job_id:
+        try:
+            q = q.filter(Candidate.job_id == uuid.UUID(job_id))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid job_id")
+        # Within a single job, the useful default is a ranking — best fit first,
+        # unscored (resume not yet confirmed) last.
+        q = q.order_by(Candidate.fit_score.desc().nullslast(), Candidate.created_at.desc())
     if role:
         q = q.filter(Candidate.role.ilike(f"%{role}%"))
     if min_experience is not None:
@@ -229,15 +239,21 @@ def _candidate_query(db, org_id, role, tech, min_experience, status):
     return results
 
 
+def _job_titles(db, org_id) -> dict:
+    return dict(db.query(JobOpening.id, JobOpening.title).filter(JobOpening.org_id == org_id).all())
+
+
 @router.get("/candidates")
 def list_candidates(
     role: str | None = None, tech: str | None = None,
     min_experience: float | None = None, status: str | None = None,
+    job_id: str | None = None,
     db: SQLASession = Depends(get_db),
     recruiter: Recruiter = Depends(require_recruiter),
 ):
     _sweep_stale_sessions(db, recruiter.org_id)
-    rows = _candidate_query(db, recruiter.org_id, role, tech, min_experience, status)
+    rows = _candidate_query(db, recruiter.org_id, role, tech, min_experience, status, job_id)
+    job_titles = _job_titles(db, recruiter.org_id)
     return [
         {
             "id": str(c.id), "session_id": str(s.id), "name": c.name, "email": c.email,
@@ -245,6 +261,9 @@ def list_candidates(
             "tech_stack": c.tech_stack, "resume_filename": c.resume_filename,
             "status": s.status, "current_step": s.current_step,
             "created_at": c.created_at.isoformat() if c.created_at else None,
+            "job_id": str(c.job_id) if c.job_id else None,
+            "job_title": job_titles.get(c.job_id),
+            "fit_score": c.fit_score, "fit_summary": c.fit_summary, "fit_details": c.fit_details,
         }
         for c, s in rows
     ]
@@ -373,13 +392,18 @@ def _csv_safe(value) -> str:
 def export_candidates(
     role: str | None = None, tech: str | None = None,
     min_experience: float | None = None, status: str | None = None,
+    job_id: str | None = None,
     db: SQLASession = Depends(get_db),
     recruiter: Recruiter = Depends(require_recruiter),
 ):
-    rows = _candidate_query(db, recruiter.org_id, role, tech, min_experience, status)
+    rows = _candidate_query(db, recruiter.org_id, role, tech, min_experience, status, job_id)
+    job_titles = _job_titles(db, recruiter.org_id)
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(["Name", "Email", "Phone", "Location", "Experience", "Role", "Tech Stack", "Status", "Step", "Resume", "Applied At"])
+    writer.writerow([
+        "Name", "Email", "Phone", "Location", "Experience", "Role", "Tech Stack", "Status", "Step", "Resume", "Applied At",
+        "Job", "Fit Score", "Fit Summary",
+    ])
     for c, s in rows:
         writer.writerow([
             _csv_safe(c.name), _csv_safe(c.email), _csv_safe(c.phone), _csv_safe(c.location),
@@ -387,6 +411,10 @@ def export_candidates(
             _csv_safe(", ".join(c.tech_stack) if c.tech_stack else ""),
             s.status, s.current_step, _csv_safe(c.resume_filename or ""),
             c.created_at.isoformat() if c.created_at else "",
+            # Job titles are recruiter-entered and fit summaries embed JD skill names —
+            # less hostile than resume fields, but the same spreadsheet opens them.
+            _csv_safe(job_titles.get(c.job_id, "")), c.fit_score if c.fit_score is not None else "",
+            _csv_safe(c.fit_summary or ""),
         ])
     buffer.seek(0)
     return StreamingResponse(iter([buffer.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=candidates.csv"})

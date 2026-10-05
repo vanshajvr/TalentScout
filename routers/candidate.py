@@ -12,12 +12,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import Candidate, CandidateSession, Message, SessionLog, Organization
+from db.models import Candidate, CandidateSession, Message, SessionLog, Organization, JobOpening
 from conversation import ConversationState, handle_user_input, get_bot_message
 from llm.groq_llm import GroqLLM
 from utils.constants import MCQ_SEEDED_TECHNOLOGIES
 from utils.validators import is_valid_email, is_valid_phone, is_valid_experience
 from utils.rate_limit import check_rate_limit
+from utils.job_match import apply_job_fit
 from deps import get_candidate_or_404, get_session_or_404
 
 router = APIRouter()
@@ -178,16 +179,44 @@ def get_organization_public(slug: str, db: SQLASession = Depends(get_db)):
     return {"name": org.name}
 
 
+def _get_open_job(db: SQLASession, org_row: Organization, job_id: str) -> JobOpening:
+    """A job-specific screening link must point at an open job in that same org —
+    otherwise a valid org slug paired with another org's job id would attach the
+    candidate to a job their recruiters can't see."""
+    try:
+        jid = uuid.UUID(job_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Unknown job")
+    job = db.get(JobOpening, jid)
+    if job is None or job.org_id != org_row.id:
+        raise HTTPException(status_code=404, detail="Unknown job")
+    if job.status != "open":
+        raise HTTPException(status_code=410, detail="This job is no longer accepting applications")
+    return job
+
+
+@router.get("/organizations/{slug}/jobs/{job_id}")
+def get_job_public(slug: str, job_id: str, db: SQLASession = Depends(get_db)):
+    """Public, unauthenticated — just enough for the candidate page header. The
+    requirement lists stay recruiter-only so candidates can't tailor answers to them."""
+    org = db.query(Organization).filter(Organization.slug == slug).first()
+    if org is None:
+        raise HTTPException(status_code=404, detail="Unknown organization")
+    job = _get_open_job(db, org, job_id)
+    return {"name": org.name, "job_title": job.title}
+
+
 @router.post("/sessions", response_model=StartSessionResponse)
-def start_session(request: Request, org: str = "default", db: SQLASession = Depends(get_db)):
+def start_session(request: Request, org: str = "default", job: str | None = None, db: SQLASession = Depends(get_db)):
     ip = request.client.host if request.client else None
     check_rate_limit(f"start_session:{ip or 'unknown'}", max_requests=10, window_minutes=60)
 
     org_row = db.query(Organization).filter(Organization.slug == org).first()
     if org_row is None:
         raise HTTPException(status_code=404, detail="Unknown organization")
+    job_row = _get_open_job(db, org_row, job) if job else None
 
-    candidate_row = Candidate(org_id=org_row.id)
+    candidate_row = Candidate(org_id=org_row.id, job_id=job_row.id if job_row else None)
     db.add(candidate_row)
     db.flush()
 
@@ -418,6 +447,12 @@ def confirm_resume_data(session_id: str, body: ConfirmResumeRequest, db: SQLASes
     _mark_step(db, session_uuid, session_row, state.step, exited_early=result.exited_early)
     
     _sync_candidate_row(db, session_row.candidate_id, state)
+
+    candidate_row = get_candidate_or_404(db, session_row.candidate_id)
+    if candidate_row.job_id is not None:
+        # Scored against the candidate-confirmed fields, not the raw extraction.
+        apply_job_fit(candidate_row, db.get(JobOpening, candidate_row.job_id))
+        db.commit()
 
     bot_messages = list(result.bot_messages)
 

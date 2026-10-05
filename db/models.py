@@ -33,7 +33,31 @@ class Candidate(Base):
     github_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"))
 
+    # Set when the candidate applied through a job-specific screening link; null for
+    # the org's general link. Fit fields are computed deterministically (utils/job_match.py)
+    # once the candidate confirms their resume data, and recomputed if the job's
+    # requirements are edited.
+    job_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("job_openings.id", ondelete="SET NULL"), nullable=True, index=True)
+    fit_score: Mapped[int | None] = mapped_column(nullable=True)  # 0-100
+    fit_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    fit_details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
     sessions: Mapped[list["CandidateSession"]] = relationship(back_populates="candidate")
+
+
+class JobOpening(Base):
+    __tablename__ = "job_openings"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id"), index=True)
+    title: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str] = mapped_column(Text)
+    must_have_skills: Mapped[list[str]] = mapped_column(JSON, default=list)
+    nice_to_have_skills: Mapped[list[str]] = mapped_column(JSON, default=list)
+    min_experience: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), default="open")  # open | closed
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recruiters.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
 
 class CandidateSession(Base):

@@ -9,15 +9,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
-from db.models import MCQAssessment, MCQAnswer, MCQQuestion
+from db.models import MCQAssessment, MCQAnswer, MCQQuestion, JobOpening
 from deps import get_session_or_404, get_candidate_or_404
 from utils.constants import (
     MCQ_TECHNICAL_COUNT, MCQ_BEHAVIORAL_COUNT, MCQ_TOTAL_COUNT,
     MCQ_TECHNICAL_TIME_LIMIT_SECONDS, MCQ_OPEN_TEXT_MAX_CHARS, MCQ_DIFFICULTY_TIERS,
-    BEHAVIORAL_QUESTION_TEMPLATES,
+    BEHAVIORAL_QUESTION_TEMPLATES, MCQ_SEEDED_TECHNOLOGIES,
 )
 from routers.candidate import _difficulty_tier, _load_prompt, _mark_step, _log_event
 from utils.llm_json import parse_llm_json
+from utils.job_match import normalize_skill
 from llm.groq_llm import GroqLLM
 
 router = APIRouter(prefix="/sessions/{session_id}/mcq")
@@ -74,6 +75,25 @@ def _adjust_difficulty(current_tier: str, last_two_correct: list[bool]) -> str:
     elif last_two_correct == [False, False]:
         idx = max(idx - 1, 0)
     return MCQ_DIFFICULTY_TIERS[idx]
+
+
+def _assessment_technologies(candidate, job: JobOpening | None) -> list[str] | None:
+    """Which technologies the technical questions rotate through. For a job-specific
+    application that's the job's skills (must-haves first) that the pool actually has
+    questions for, in the pool's own spelling — the candidate is being screened for
+    the job, not for whatever their resume happens to list. Falls back to the
+    candidate's own stack for general applications, or a job with no seeded skills."""
+    if job is not None:
+        seeded = {normalize_skill(t): t for t in MCQ_SEEDED_TECHNOLOGIES}
+        keys = [normalize_skill(s) for s in (job.must_have_skills or []) + (job.nice_to_have_skills or [])]
+        techs = [seeded[k] for k in dict.fromkeys(keys) if k in seeded]
+        if techs:
+            return techs
+    return candidate.tech_stack
+
+
+def _screening_role(candidate, job: JobOpening | None) -> str | None:
+    return job.title if job is not None else candidate.role
 
 
 def _tech_for_index(tech_stack: list[str] | None, index: int) -> str:
@@ -169,10 +189,10 @@ def _valid_options_shape(options) -> bool:
     return len(ids) == 4  # ids must be unique, not just present
 
 
-def _generate_behavioral_question(db: SQLASession, session_uuid: uuid.UUID, candidate, already_asked: list[str], dimension: str) -> dict:
+def _generate_behavioral_question(db: SQLASession, session_uuid: uuid.UUID, candidate, role: str | None, already_asked: list[str], dimension: str) -> dict:
     prompt_template = _load_prompt("prompts/behavioral_mcq_prompt.txt")
     prompt = prompt_template.format(
-        role=candidate.role or "the applied role",
+        role=role or "the applied role",
         experience=candidate.experience if candidate.experience is not None else "unspecified",
         tech_stack=", ".join(candidate.tech_stack) if candidate.tech_stack else "unspecified",
         resume_excerpt=(candidate.resume_text or "")[:3000],
@@ -208,6 +228,7 @@ def _serve_question(db: SQLASession, assessment: MCQAssessment, candidate) -> MC
 
     index = assessment.current_question_index
     now = datetime.utcnow()
+    job = db.get(JobOpening, candidate.job_id) if candidate.job_id else None
 
     if index < MCQ_TECHNICAL_COUNT:
         if index == 0:
@@ -232,7 +253,7 @@ def _serve_question(db: SQLASession, assessment: MCQAssessment, candidate) -> MC
                 last_two_correct = []
             difficulty_tier = _adjust_difficulty(prev_tier, last_two_correct)
 
-        technology = _tech_for_index(candidate.tech_stack, index)
+        technology = _tech_for_index(_assessment_technologies(candidate, job), index)
         already_served_ids: list[uuid.UUID] = [
             a.pool_question_id for a in db.query(MCQAnswer).filter(
                 MCQAnswer.assessment_id == assessment.id, MCQAnswer.question_type == "technical",
@@ -267,7 +288,9 @@ def _serve_question(db: SQLASession, assessment: MCQAssessment, candidate) -> MC
                 MCQAnswer.assessment_id == assessment.id, MCQAnswer.question_type == "behavioral",
             ).order_by(MCQAnswer.question_index).all()
         ]
-        generated = _generate_behavioral_question(db, assessment.session_id, candidate, already_asked, dimension)
+        generated = _generate_behavioral_question(
+            db, assessment.session_id, candidate, _screening_role(candidate, job), already_asked, dimension,
+        )
         answer = MCQAnswer(
             assessment_id=assessment.id, question_index=index, question_type="behavioral",
             pool_question_id=None, question_text=generated["question_text"],
@@ -276,7 +299,7 @@ def _serve_question(db: SQLASession, assessment: MCQAssessment, candidate) -> MC
 
     else:
         open_text_position = index - MCQ_TECHNICAL_COUNT - MCQ_BEHAVIORAL_COUNT
-        role = candidate.role or "this role"
+        role = _screening_role(candidate, job) or "this role"
         template = BEHAVIORAL_QUESTION_TEMPLATES[open_text_position]
         question_text = template.format(role=role, role_lower=role.lower())
         answer = MCQAnswer(

@@ -598,3 +598,40 @@ button:disabled {
 .qa-option-row.qa-correct-option { background: #e4f0e0; color: #3f7a3f; font-weight: 500; }
 .qa-option-row.qa-selected-wrong { background: #f5e2df; color: var(--accent); font-weight: 500; }
 .qa-option-row.qa-selected-neutral { background: var(--accent-soft); color: var(--text); font-weight: 500; }
+/* --- Jobs tab --- */
+.job-form { display: flex; flex-direction: column; gap: 8px; max-width: 720px; padding: 24px 28px; border-bottom: 1px solid var(--border); }
+.job-form-title { font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.job-form input, .job-form textarea {
+  padding: 9px 12px; background: #fdf9f2; color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; font-size: 13px; font-family: inherit;
+}
+.job-form textarea { resize: vertical; max-height: none; flex: none; }
+.job-form-hint { font-size: 12px; color: var(--muted); }
+.job-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.job-btn-primary, .job-btn-secondary {
+  align-self: flex-start; border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; border: 1px solid var(--accent);
+}
+.job-btn-primary { background: var(--accent); color: white; margin-top: 6px; }
+.job-btn-secondary { background: transparent; color: var(--accent); }
+.job-list { padding: 20px 28px; }
+.job-card { background: var(--bubble-bot); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
+.job-card-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.job-card-title { font-weight: 600; color: var(--text); }
+.job-card-meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.job-card-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.job-card-actions button { border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; background: transparent; color: var(--accent); border: 1px solid var(--border); }
+.skill-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.skill-chip { font-size: 11.5px; padding: 2px 8px; border-radius: 20px; background: var(--panel); border: 1px solid var(--border); color: var(--text); }
+.skill-chip.nice { color: var(--muted); }
+.skill-chip.missing { color: var(--accent); border-color: #e8c4bb; text-decoration: line-through; }
+.badge.open { background: #dbeee0; color: #2f7a45; }
+.badge.closed { background: var(--border); color: var(--muted); }
+
+/* Fit score: high / mid / low bands */
+.fit-score { display: inline-block; min-width: 34px; text-align: center; font-weight: 600; padding: 2px 8px; border-radius: 6px; cursor: help; }
+.fit-score.fit-high { background: #dbeee0; color: #2f7a45; }
+.fit-score.fit-mid { background: #f5e3c8; color: #9a6a1f; }
+.fit-score.fit-low { background: #f5e2df; color: var(--accent); }
+.fit-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+.fit-card-head { display: flex; align-items: center; gap: 10px; font-weight: 500; color: var(--text); }
+.fit-card-summary { font-size: 13px; color: var(--muted); margin-top: 6px; }

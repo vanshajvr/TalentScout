@@ -60,6 +60,7 @@
     </div>
     <button id="back-link-dash" class="back-corner-btn" aria-label="Back"><i class="ti ti-arrow-left"></i></button>    <div class="rec-nav">
       <button class="rec-nav-item active" data-tab="overview">Overview</button>
+      <button class="rec-nav-item" data-tab="jobs">Jobs</button>
       <button class="rec-nav-item" data-tab="candidates">Candidates</button>
       <button class="rec-nav-item" data-tab="responses">Interview Responses</button>
       <button class="rec-nav-item" data-tab="logs">Session Logs</button>
@@ -106,8 +107,30 @@
       <div class="stat-grid" id="stat-grid"></div>
     </div>
 
+    <div id="tab-jobs" class="tab-panel" style="display:none;">
+      <div class="job-form">
+        <div class="job-form-title">New job opening</div>
+        <input type="text" id="job-title" placeholder="Job title, e.g. Backend Engineer" maxlength="120">
+        <textarea id="job-description" rows="8" placeholder="Paste the full job description…"></textarea>
+        <button id="job-extract-btn" class="job-btn-secondary">Extract requirements with AI</button>
+        <div class="job-form-hint">Review what the AI pulled out — it's only a draft. Candidates are scored against these lists, not the raw description.</div>
+        <label class="job-label" for="job-must">Must-have skills (comma-separated)</label>
+        <input type="text" id="job-must" placeholder="Python, SQL, Docker">
+        <label class="job-label" for="job-nice">Nice-to-have skills (comma-separated)</label>
+        <input type="text" id="job-nice" placeholder="AWS, Kubernetes">
+        <label class="job-label" for="job-min-exp">Minimum experience (years, optional)</label>
+        <input type="number" id="job-min-exp" min="0" max="50" step="0.5" placeholder="e.g. 2">
+        <div id="job-error" class="error-text" style="display:none;"></div>
+        <button id="job-create-btn" class="job-btn-primary">Create job</button>
+      </div>
+      <div class="job-list" id="job-list"></div>
+    </div>
+
     <div id="tab-candidates" class="tab-panel" style="display:none;">      
       <div class="filters">
+        <select id="filter-job">
+          <option value="">Any job</option>
+        </select>
         <input type="text" id="filter-role" placeholder="Role contains…">
         <input type="text" id="filter-tech" placeholder="Tech stack contains…">
         <input type="number" id="filter-experience" placeholder="Min experience (yrs)" step="0.5">
@@ -126,7 +149,7 @@
           <thead>
             <tr>
               <th style="width:30px;"><input type="checkbox" id="select-all"></th>
-              <th>Name</th><th>Email</th><th>Phone</th><th>Location</th>
+              <th>Name</th><th>Job</th><th>Fit</th><th>Email</th><th>Phone</th><th>Location</th>
               <th>Experience</th><th>Role</th><th>Tech Stack</th>
               <th>Resume</th><th>Status</th><th>Applied</th>
             </tr>

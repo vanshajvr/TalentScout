@@ -40,6 +40,24 @@ management.
 - A smooth, readable transition into the assessment rather than an instant
   page jump
 
+**Job openings & fit ranking**
+- Recruiters paste a job description; the LLM drafts must-have skills,
+  nice-to-have skills, and minimum experience, which the recruiter reviews
+  and edits before saving: the AI output is a draft, never the final word
+- Each job gets its own screening link (`/screen/{org}/jobs/{job_id}`);
+  closing a job stops new applications through it
+- Candidates are scored 0-100 against the job **deterministically**, not by
+  the LLM: must-haves 70%, nice-to-haves 20%, minimum experience 10%, with
+  only the groups a job actually specifies counting toward the total. Every
+  score comes with its reasons ("Meets 4/5 must-haves (missing Kubernetes) ·
+  2/3 nice-to-haves · 3 yrs vs 2 yrs required") and per-skill evidence
+  (found in the confirmed tech stack vs. the resume text)
+- Filtering the candidate table by job ranks candidates by fit; editing a
+  job's requirements re-scores everyone who applied to it
+- Technical questions for a job applicant are drawn from the job's skills,
+  not the candidate's resume: candidates are screened for the role they
+  applied to
+
 **Multi-tenant org model**
 - Organizations are isolated, one company's recruiters never see another
   company's candidates
@@ -107,19 +125,22 @@ management.
 │   └── ollama_llm.py       # Local Ollama implementation (offline fallback)
 ├── prompts/
 │   ├── resume_extraction_prompt.txt
+│   ├── jd_extraction_prompt.txt
 │   ├── behavioral_mcq_prompt.txt
 │   └── technical_mcq_pool_prompt.txt
 ├── routers/
 │   ├── candidate.py       # Session, messaging, resume upload/confirm endpoints
 │   ├── mcq.py              # MCQ assessment: serving, answering, integrity events
 │   ├── recruiter.py       # Auth, candidate listing, export, delete, org context
+│   ├── jobs.py            # Job openings: JD extraction, CRUD, fit re-scoring
 │   └── admin.py           # Org signup, team management, invite codes
 ├── utils/
 │   ├── auth.py             # Token issuance/validation, password hashing
 │   ├── rate_limit.py       # In-memory sliding-window rate limiter
 │   ├── schemas.py          # Shared Pydantic response models
 │   ├── constants.py        # Conversation step order, MCQ config
-│   └── validators.py       # Name/email/phone/experience validation
+│   ├── validators.py       # Name/email/phone/experience validation
+│   └── job_match.py        # Deterministic candidate-to-job fit scoring
 └── static/
     ├── candidate/          # Candidate-facing chat UI + landing page
     ├── mcq/                 # MCQ assessment UI
@@ -182,6 +203,11 @@ GROQ_API_KEY=your_groq_api_key
 Create the schema:
 ```bash
 python create_tables.py
+```
+
+Upgrading an existing database instead? Run the migration for job openings:
+```bash
+python -m migrations.migrate_job_openings
 ```
 
 Seed the technical MCQ question pool (requires `GROQ_API_KEY`, safe to

@@ -1,0 +1,36 @@
+You are extracting structured hiring requirements from a job description.
+
+Job title: {title}
+
+Job description:
+{description}
+
+Extract the following fields as strict JSON, with no extra commentary:
+{{
+  "must_have_skills": ["<skill 1>", "<skill 2>", ...],
+  "nice_to_have_skills": ["<skill 1>", ...],
+  "min_experience": <minimum years of professional experience required as a number, or null>
+}}
+
+Rules:
+- Only include requirements explicitly stated in the job description. Do not infer
+  skills from the job title alone.
+- must_have_skills are skills the description presents as required ("must", "required",
+  "you have", "strong experience in", or listed under a requirements heading).
+  nice_to_have_skills are ones presented as optional ("nice to have", "bonus", "plus",
+  "preferred", "familiarity with").
+- If the description doesn't distinguish required from optional, treat the skills it
+  lists as must-haves.
+- List concrete technologies, languages, frameworks, platforms and tools only — not
+  soft skills ("communication", "teamwork") and not generic phrases ("problem solving",
+  "best practices").
+- Normalize skill names toward these canonical names where a reasonable match exists:
+  {canonical_technologies}. For example: FastAPI, Django, Flask -> "Python";
+  Express, NestJS -> "Node.js"; Next.js -> "React"; PostgreSQL, MySQL -> "SQL";
+  EKS, EC2, Lambda -> "AWS". If a genuinely different technology is the clearest fit
+  (e.g. Rust, Terraform, Kafka), keep its own name.
+- Never list the same skill twice, and never list a skill in both arrays.
+- Keep each list to at most 8 skills, most important first.
+- min_experience: use the lower bound of any stated range ("3-5 years" -> 3). If no
+  experience requirement is stated, use null.
+- Output ONLY the JSON object, nothing else.

@@ -63,6 +63,11 @@ def _clean_state():
     isolation wouldn't actually undo anything the app itself committed.
     """
     yield
+    # Every TestClient request comes from the same "testclient" host, so the per-IP
+    # in-memory rate limiter would otherwise start returning 429s once the suite has
+    # signed up enough orgs, failing whichever tests happen to run last.
+    from utils.rate_limit import _request_log
+    _request_log.clear()
     table_names = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
     with engine.begin() as conn:
         conn.exec_driver_sql(f"TRUNCATE {table_names} RESTART IDENTITY CASCADE")

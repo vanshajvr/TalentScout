@@ -240,9 +240,12 @@ function maybeShowResumeUpload() {
 }
 
 async function startSession() {
-  const orgParam = window.CURRENT_ORG_SLUG ? `?org=${window.CURRENT_ORG_SLUG}` : "";
+  const params = new URLSearchParams();
+  if (window.CURRENT_ORG_SLUG) params.set("org", window.CURRENT_ORG_SLUG);
+  if (window.CURRENT_JOB_ID) params.set("job", window.CURRENT_JOB_ID);
+  const query = params.toString() ? `?${params.toString()}` : "";
   try {
-    const res = await fetch(`${API}/sessions${orgParam}`, { method: "POST" });
+    const res = await fetch(`${API}/sessions${query}`, { method: "POST" });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.detail || "Couldn't start a screening session.");

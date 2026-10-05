@@ -9,12 +9,12 @@ const revealObserver = new IntersectionObserver((entries) => {
 
 document.querySelectorAll(".reveal").forEach((el) => revealObserver.observe(el));
 
-function getOrgSlugFromPath() {
-  const match = window.location.pathname.match(/^\/screen\/([a-z0-9-]+)$/);
-  return match ? match[1] : null;
-}
+// Matches both the org's general link (/screen/{slug}) and a job-specific one
+// (/screen/{slug}/jobs/{job_id}).
+const SCREEN_PATH_MATCH = window.location.pathname.match(/^\/screen\/([a-z0-9-]+)(?:\/jobs\/([0-9a-f-]{36}))?$/i);
 
-window.CURRENT_ORG_SLUG = getOrgSlugFromPath();
+window.CURRENT_ORG_SLUG = SCREEN_PATH_MATCH ? SCREEN_PATH_MATCH[1].toLowerCase() : null;
+window.CURRENT_JOB_ID = SCREEN_PATH_MATCH && SCREEN_PATH_MATCH[2] ? SCREEN_PATH_MATCH[2].toLowerCase() : null;
 
 function showView(id) {
   const views = {
@@ -30,21 +30,28 @@ function showView(id) {
   });
 }
 
-function applyOrgBranding(orgName) {
+function applyOrgBranding(orgName, jobTitle) {
+  const line = jobTitle ? `${jobTitle} at ${orgName}` : `Screening for ${orgName}`;
   document.querySelectorAll(".sidebar-brand-sub").forEach((el) => {
-    el.textContent = `Screening for ${orgName}`;
+    el.textContent = line;
     el.style.display = "block";
   });
   const mainSub = document.getElementById("main-sub-line");
-  if (mainSub) mainSub.textContent = `Screening for ${orgName}`;
+  if (mainSub) mainSub.textContent = line;
 }
 
-async function goToOrgSlug(slug) {
+async function goToOrgSlug(slug, jobId) {
   try {
-    const res = await fetch(`/organizations/${slug}`);
+    const url = jobId ? `/organizations/${slug}/jobs/${jobId}` : `/organizations/${slug}`;
+    const res = await fetch(url);
+    if (res.status === 410) {
+      document.getElementById("org-error-title").textContent = "This job is no longer accepting applications";
+      document.getElementById("org-error-copy").textContent = "The recruiter has closed this position. Check with them for other open roles.";
+      throw new Error("closed");
+    }
     if (!res.ok) throw new Error("not found");
     const data = await res.json();
-    applyOrgBranding(data.name);
+    applyOrgBranding(data.name, data.job_title);
     showView("home-view");
   } catch (e) {
     showView("org-error-view");
@@ -53,7 +60,7 @@ async function goToOrgSlug(slug) {
 
 function parseOrgInput(raw) {
   const trimmed = raw.trim();
-  const urlMatch = trimmed.match(/\/screen\/([a-z0-9-]+)/i);
+  const urlMatch = trimmed.match(/\/screen\/([a-z0-9-]+(?:\/jobs\/[0-9a-f-]{36})?)/i);
   if (urlMatch) return urlMatch[1].toLowerCase();
   return trimmed.toLowerCase().replace(/[^a-z0-9-]/g, "");
 }
@@ -85,7 +92,7 @@ if (window.CURRENT_ORG_SLUG) {
   // A real /screen/{slug} link — fetch the org's name before showing anything,
   // so an invalid link shows a clear error immediately rather than letting the
   // candidate proceed into a flow that will only fail later.
-  goToOrgSlug(window.CURRENT_ORG_SLUG);
+  goToOrgSlug(window.CURRENT_ORG_SLUG, window.CURRENT_JOB_ID);
 } else if (params.get("start") === "true") {
   // The generic "Candidate" entry with no org context at all — prompt for a
   // real screening link instead of starting a session with nowhere to go.

@@ -12,6 +12,20 @@ const responsesList = document.getElementById("responses-list");
 const deleteBtn = document.getElementById("delete-btn");
 const selectAll = document.getElementById("select-all");
 let selectedIds = new Set();
+let candidatesById = new Map();
+let jobsCache = [];
+let orgSlug = null;
+
+const jobList = document.getElementById("job-list");
+const jobTitleInput = document.getElementById("job-title");
+const jobDescInput = document.getElementById("job-description");
+const jobMustInput = document.getElementById("job-must");
+const jobNiceInput = document.getElementById("job-nice");
+const jobMinExpInput = document.getElementById("job-min-exp");
+const jobError = document.getElementById("job-error");
+const jobExtractBtn = document.getElementById("job-extract-btn");
+const jobCreateBtn = document.getElementById("job-create-btn");
+const filterJob = document.getElementById("filter-job");
 
 const loginEmail = document.getElementById("login-email");
 const loginPassword = document.getElementById("login-password");
@@ -48,8 +62,10 @@ async function showDashboard() {
 
   const org = await (await authedFetch(`${API}/recruiter/org`)).json();
   dashOrgName.textContent = org.org_name;
+  orgSlug = org.org_slug;
 
   loadOverview();
+  loadJobs();
   loadCandidates();
 }
 
@@ -59,6 +75,7 @@ function currentFilters() {
   const experience = document.getElementById("filter-experience").value.trim();
   const status = document.getElementById("filter-status").value;
   const params = new URLSearchParams();
+  if (filterJob.value) params.set("job_id", filterJob.value);
   if (role) params.set("role", role);
   if (tech) params.set("tech", tech);
   if (experience) params.set("min_experience", experience);
@@ -99,11 +116,14 @@ async function loadCandidates() {
   const rows = await res.json();
 
   candidatesBody.innerHTML = "";
+  candidatesById = new Map(rows.map((c) => [c.id, c]));
   rows.forEach((c) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><input type="checkbox" class="row-check" data-id="${c.id}" ${selectedIds.has(c.id) ? "checked" : ""}></td>
       <td>${escapeHtml(c.name) || "—"}</td>
+      <td>${escapeHtml(c.job_title) || "—"}</td>
+      <td>${fitBadge(c)}</td>
       <td>${escapeHtml(c.email) || "—"}</td>
       <td>${escapeHtml(c.phone) || "—"}</td>      
       <td>${escapeHtml(c.location) || "—"}</td>
@@ -155,7 +175,186 @@ async function loadCandidateQuestions(candidateId) {
   } else {
     renderLegacyQuestions(data.legacy_questions || []);
   }
+  const candidate = candidatesById.get(candidateId);
+  if (candidate && candidate.fit_summary) {
+    responsesList.prepend(renderFitCard(candidate));
+  }
 }
+
+function fitBand(score) {
+  if (score >= 75) return "fit-high";
+  if (score >= 50) return "fit-mid";
+  return "fit-low";
+}
+
+function fitBadge(c) {
+  if (c.fit_score == null) return "—";
+  return `<span class="fit-score ${fitBand(c.fit_score)}" title="${escapeHtml(c.fit_summary)}">${c.fit_score}</span>`;
+}
+
+function renderFitCard(c) {
+  const card = document.createElement("div");
+  card.className = "fit-card";
+  const d = c.fit_details || {};
+  const chips = [
+    ...((d.must_have && d.must_have.matched) || []).map((m) => `<span class="skill-chip" title="Found in ${escapeHtml(m.source === "tech_stack" ? "confirmed tech stack" : "resume text")}">${escapeHtml(m.skill)}</span>`),
+    ...((d.must_have && d.must_have.missing) || []).map((s) => `<span class="skill-chip missing" title="Must-have not found">${escapeHtml(s)}</span>`),
+    ...((d.nice_to_have && d.nice_to_have.matched) || []).map((m) => `<span class="skill-chip nice" title="Nice-to-have">${escapeHtml(m.skill)}</span>`),
+  ].join("");
+  card.innerHTML = `
+    <div class="fit-card-head">
+      ${c.fit_score != null ? `<span class="fit-score ${fitBand(c.fit_score)}">${c.fit_score}</span>` : ""}
+      <span>Fit for ${escapeHtml(c.job_title || "this job")}</span>
+    </div>
+    <div class="fit-card-summary">${escapeHtml(c.fit_summary)}</div>
+    ${chips ? `<div class="skill-chips">${chips}</div>` : ""}
+  `;
+  return card;
+}
+
+function parseSkillInput(value) {
+  return value.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function showJobError(message) {
+  jobError.textContent = message;
+  jobError.style.display = message ? "block" : "none";
+}
+
+async function loadJobs() {
+  const res = await authedFetch(`${API}/recruiter/jobs`);
+  jobsCache = await res.json();
+  renderJobs();
+
+  const previous = filterJob.value;
+  filterJob.innerHTML = '<option value="">Any job</option><option value="none">General link (no job)</option>';
+  jobsCache.forEach((j) => {
+    const opt = document.createElement("option");
+    opt.value = j.id;
+    opt.textContent = j.status === "open" ? j.title : `${j.title} (closed)`;
+    filterJob.appendChild(opt);
+  });
+  filterJob.value = Array.from(filterJob.options).some((o) => o.value === previous) ? previous : "";
+}
+
+function jobScreeningLink(job) {
+  return `${window.location.origin}/screen/${orgSlug}/jobs/${job.id}`;
+}
+
+function renderJobs() {
+  jobList.innerHTML = "";
+  if (jobsCache.length === 0) {
+    jobList.innerHTML = '<div class="empty-note" style="padding:0;">No job openings yet. Create one above to get a job-specific screening link.</div>';
+    return;
+  }
+  jobsCache.forEach((job) => {
+    const card = document.createElement("div");
+    card.className = "job-card";
+    const chips = [
+      ...job.must_have_skills.map((s) => `<span class="skill-chip">${escapeHtml(s)}</span>`),
+      ...job.nice_to_have_skills.map((s) => `<span class="skill-chip nice" title="Nice-to-have">${escapeHtml(s)}</span>`),
+    ].join("");
+    card.innerHTML = `
+      <div class="job-card-head">
+        <span class="job-card-title">${escapeHtml(job.title)}</span>
+        <span class="badge ${escapeHtml(job.status)}">${escapeHtml(job.status)}</span>
+      </div>
+      ${chips ? `<div class="skill-chips">${chips}</div>` : ""}
+      <div class="job-card-meta">
+        ${job.candidate_count} candidate${job.candidate_count === 1 ? "" : "s"}
+        ${job.min_experience != null ? ` · ${job.min_experience}+ yrs required` : ""}
+      </div>
+      <div class="job-card-actions">
+        <button data-action="ranked">View ranked candidates</button>
+        ${job.status === "open" ? '<button data-action="copy">Copy screening link</button>' : ""}
+        <button data-action="toggle">${job.status === "open" ? "Close job" : "Reopen job"}</button>
+      </div>
+    `;
+    card.querySelector('[data-action="ranked"]').addEventListener("click", () => {
+      filterJob.value = job.id;
+      document.querySelector('.rec-nav-item[data-tab="candidates"]').click();
+      loadCandidates();
+    });
+    card.querySelector('[data-action="copy"]')?.addEventListener("click", async (e) => {
+      try {
+        await navigator.clipboard.writeText(jobScreeningLink(job));
+        e.target.textContent = "Copied!";
+      } catch (err) {
+        prompt("Copy this screening link:", jobScreeningLink(job));
+      }
+    });
+    card.querySelector('[data-action="toggle"]').addEventListener("click", async () => {
+      const res = await authedFetch(`${API}/recruiter/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: job.status === "open" ? "closed" : "open" }),
+      });
+      if (!res.ok) {
+        alert(formatError(await res.json().catch(() => ({}))));
+        return;
+      }
+      loadJobs();
+    });
+    jobList.appendChild(card);
+  });
+}
+
+jobExtractBtn.addEventListener("click", async () => {
+  showJobError("");
+  if (!jobTitleInput.value.trim() || !jobDescInput.value.trim()) {
+    showJobError("Enter a job title and paste the description first.");
+    return;
+  }
+  jobExtractBtn.disabled = true;
+  jobExtractBtn.textContent = "Extracting…";
+  try {
+    const res = await authedFetch(`${API}/recruiter/jobs/parse`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: jobTitleInput.value.trim(), description: jobDescInput.value.trim() }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      showJobError(formatError(data));
+      return;
+    }
+    jobMustInput.value = data.must_have_skills.join(", ");
+    jobNiceInput.value = data.nice_to_have_skills.join(", ");
+    jobMinExpInput.value = data.min_experience ?? "";
+  } finally {
+    jobExtractBtn.disabled = false;
+    jobExtractBtn.textContent = "Extract requirements with AI";
+  }
+});
+
+jobCreateBtn.addEventListener("click", async () => {
+  showJobError("");
+  const minExp = jobMinExpInput.value.trim();
+  jobCreateBtn.disabled = true;
+  try {
+    const res = await authedFetch(`${API}/recruiter/jobs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: jobTitleInput.value.trim(),
+        description: jobDescInput.value.trim(),
+        must_have_skills: parseSkillInput(jobMustInput.value),
+        nice_to_have_skills: parseSkillInput(jobNiceInput.value),
+        min_experience: minExp === "" ? null : Number(minExp),
+      }),
+    });
+    if (!res.ok) {
+      showJobError(formatError(await res.json().catch(() => ({}))));
+      return;
+    }
+    [jobTitleInput, jobDescInput, jobMustInput, jobNiceInput, jobMinExpInput].forEach((el) => (el.value = ""));
+    loadJobs();
+  } finally {
+    jobCreateBtn.disabled = false;
+  }
+});
+
+filterJob.addEventListener("change", loadCandidates);
 
 function renderMcqResults(mcq) {
   responsesList.innerHTML = "";
