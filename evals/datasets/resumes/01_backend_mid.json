@@ -1,0 +1,22 @@
+{
+  "resume_file": "01_backend_mid.txt",
+  "as_of": "2026-10-01",
+  "notes": "Clean, conventional resume. Framework names should normalize to Python / SQL.",
+  "expected": {
+    "email": "priya.raman@example.com",
+    "phone": "+1 415 555 0142",
+    "location": "Austin, TX",
+    "experience": 4.0,
+    "role": "Backend Engineer at Finlytics",
+    "education": "B.S. Computer Science, University of Texas at Austin",
+    "linkedin": "https://linkedin.com/in/priyaraman-dev",
+    "github": "https://github.com/priyaraman",
+    "tech_stack": [
+      "Python",
+      "SQL",
+      "Redis",
+      "Docker",
+      "AWS"
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "resume_file": "03_contacts_behind_links.txt",
+  "as_of": "2026-10-01",
+  "notes": "Contact details only appear as PDF hyperlink markers behind generic labels.",
+  "expected": {
+    "email": "meera.k@outlook.com",
+    "phone": "+91 80 4123 5678",
+    "location": "Bengaluru, India",
+    "experience": 5.6,
+    "role": "Data Engineer at Streamline Retail",
+    "education": "M.Sc. Statistics, University of Hyderabad",
+    "linkedin": "https://www.linkedin.com/in/meera-krishnan/",
+    "github": "https://github.com/meerak",
+    "tech_stack": [
+      "SQL",
+      "Python",
+      "Airflow",
+      "Spark",
+      "AWS"
+    ]
+  }
+}

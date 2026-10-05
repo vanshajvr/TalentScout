@@ -9,20 +9,15 @@ from sqlalchemy.orm import Session as SQLASession
 from db.database import get_db
 from db.models import Candidate, JobOpening, Recruiter
 from llm.groq_llm import GroqLLM
-from routers.candidate import _load_prompt
 from utils.auth import require_recruiter
-from utils.constants import MCQ_SEEDED_TECHNOLOGIES
-from utils.job_match import apply_job_fit, clean_skill_list, normalize_skill
-from utils.llm_json import parse_llm_json
+from utils.extraction import MAX_SKILLS_PER_LIST, extract_job_requirements
+from utils.job_match import apply_job_fit, split_requirements
 from utils.rate_limit import check_rate_limit
 
 router = APIRouter(prefix="/recruiter/jobs")
 logger = logging.getLogger(__name__)
 
 llm = GroqLLM()
-
-MAX_SKILLS_PER_LIST = 20
-JD_PROMPT_MAX_CHARS = 8000
 
 
 class ParseJobRequest(BaseModel):
@@ -46,14 +41,6 @@ class UpdateJobRequest(BaseModel):
     min_experience: float | None = Field(default=None, ge=0, le=50)
     clear_min_experience: bool = False  # min_experience=None alone means "unchanged"
     status: str | None = None  # open | closed
-
-
-def _split_requirements(must_have: list | None, nice_to_have: list | None) -> tuple[list[str], list[str]]:
-    """Cleans both lists and drops any nice-to-have that's already a must-have."""
-    must = clean_skill_list(must_have)
-    must_keys = {normalize_skill(s) for s in must}
-    nice = [s for s in clean_skill_list(nice_to_have) if normalize_skill(s) not in must_keys]
-    return must, nice
 
 
 def _job_payload(job: JobOpening, candidate_count: int = 0) -> dict:
@@ -87,32 +74,11 @@ def parse_job_description(body: ParseJobRequest, recruiter: Recruiter = Depends(
     draft only — nothing is saved until the recruiter reviews it and calls POST /."""
     check_rate_limit(f"parse_jd:{recruiter.id}", max_requests=30, window_minutes=60)
 
-    prompt = _load_prompt("prompts/jd_extraction_prompt.txt").format(
-        title=body.title,
-        description=body.description[:JD_PROMPT_MAX_CHARS],
-        canonical_technologies=", ".join(MCQ_SEEDED_TECHNOLOGIES),
-    )
     try:
-        parsed = parse_llm_json(llm.generate(prompt, temperature=0, json_mode=True))
-        if not isinstance(parsed, dict):
-            raise ValueError("expected a JSON object")
+        return extract_job_requirements(llm, body.title, body.description)
     except Exception as e:
         logger.warning("JD extraction failed: %s", e)
         raise HTTPException(status_code=502, detail="Couldn't extract requirements automatically — please enter them manually.")
-
-    must, nice = _split_requirements(parsed.get("must_have_skills"), parsed.get("nice_to_have_skills"))
-    try:
-        min_experience = float(parsed["min_experience"]) if parsed.get("min_experience") is not None else None
-    except (TypeError, ValueError):
-        min_experience = None
-    if min_experience is not None and not (0 <= min_experience <= 50):
-        min_experience = None
-
-    return {
-        "must_have_skills": must[:MAX_SKILLS_PER_LIST],
-        "nice_to_have_skills": nice[:MAX_SKILLS_PER_LIST],
-        "min_experience": min_experience,
-    }
 
 
 @router.get("")
@@ -134,7 +100,7 @@ def list_jobs(db: SQLASession = Depends(get_db), recruiter: Recruiter = Depends(
 
 @router.post("")
 def create_job(body: CreateJobRequest, db: SQLASession = Depends(get_db), recruiter: Recruiter = Depends(require_recruiter)):
-    must, nice = _split_requirements(body.must_have_skills, body.nice_to_have_skills)
+    must, nice = split_requirements(body.must_have_skills, body.nice_to_have_skills)
     job = JobOpening(
         org_id=recruiter.org_id,
         title=body.title.strip(),
@@ -171,7 +137,7 @@ def update_job(
         or body.min_experience is not None or body.clear_min_experience
     )
     if requirements_changed:
-        must, nice = _split_requirements(
+        must, nice = split_requirements(
             body.must_have_skills if body.must_have_skills is not None else job.must_have_skills,
             body.nice_to_have_skills if body.nice_to_have_skills is not None else job.nice_to_have_skills,
         )

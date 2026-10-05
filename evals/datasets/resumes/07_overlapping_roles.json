@@ -1,0 +1,21 @@
+{
+  "resume_file": "07_overlapping_roles.txt",
+  "as_of": "2026-10-01",
+  "notes": "The freelance role runs concurrently with the full-time one; experience should be ~4 yrs, not ~5.8.",
+  "expected": {
+    "email": "daniel.okafor@example.com",
+    "phone": "+234 803 555 0199",
+    "location": "Lagos, Nigeria",
+    "experience": 4.0,
+    "role": "Software Engineer at PayGrid",
+    "education": "B.Eng. Electrical Engineering, University of Lagos",
+    "linkedin": null,
+    "github": "https://github.com/dokafor",
+    "tech_stack": [
+      "Java",
+      "Kotlin",
+      "SQL",
+      "Docker"
+    ]
+  }
+}

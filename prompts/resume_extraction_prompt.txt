@@ -1,5 +1,7 @@
 You are extracting structured candidate information from a resume.
 
+Today's date is {today}. Use it for any role listed as "Present", "Current" or "Now".
+
 Resume text:
 {resume_text}
 

@@ -1,0 +1,21 @@
+{
+  "resume_file": "02_student_internships.txt",
+  "as_of": "2026-10-01",
+  "notes": "Student with only internships: experience should be summed internship time (~0.5 yrs), not degree years.",
+  "expected": {
+    "email": "arjun.nair2027@gmail.com",
+    "phone": "+91 98765 43210",
+    "location": "New Delhi, India",
+    "experience": 0.5,
+    "role": "Machine Learning Intern at Quantix AI",
+    "education": "B.Tech Computer Science and Engineering, Delhi Technological University",
+    "linkedin": "https://linkedin.com/in/arjun-nair-27",
+    "github": "https://github.com/arjunnair",
+    "tech_stack": [
+      "Python",
+      "JavaScript",
+      "React",
+      "SQL"
+    ]
+  }
+}

@@ -54,6 +54,14 @@ def clean_skill_list(skills: list | None) -> list[str]:
     return result
 
 
+def split_requirements(must_have: list | None, nice_to_have: list | None) -> tuple[list[str], list[str]]:
+    """Cleans both lists and drops any nice-to-have that's already a must-have."""
+    must = clean_skill_list(must_have)
+    must_keys = {normalize_skill(s) for s in must}
+    nice = [s for s in clean_skill_list(nice_to_have) if normalize_skill(s) not in must_keys]
+    return must, nice
+
+
 def _mentioned_in_text(skill: str, text_lower: str) -> bool:
     needle = skill.strip().lower()
     if len(needle) < MIN_RESUME_TEXT_MATCH_LENGTH:

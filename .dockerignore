@@ -9,4 +9,4 @@ uploads/
 .env.test
 tests/
 .pytest_cache
-requirements-dev.txt
+requirements-dev.txtevals/

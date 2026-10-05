@@ -1,0 +1,17 @@
+{
+  "title": "Platform Engineer",
+  "description_file": "05_devops_preferred_wording.txt",
+  "notes": "'Preferred' marks nice-to-haves.",
+  "expected": {
+    "must_have_skills": [
+      "Kubernetes",
+      "Terraform",
+      "AWS"
+    ],
+    "nice_to_have_skills": [
+      "Go",
+      "Prometheus"
+    ],
+    "min_experience": 4
+  }
+}

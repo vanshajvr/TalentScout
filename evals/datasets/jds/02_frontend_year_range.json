@@ -1,0 +1,16 @@
+{
+  "title": "Frontend Engineer",
+  "description_file": "02_frontend_year_range.txt",
+  "notes": "Experience is a range: lower bound expected. 'Bonus points' marks optional skills.",
+  "expected": {
+    "must_have_skills": [
+      "React",
+      "TypeScript"
+    ],
+    "nice_to_have_skills": [
+      "GraphQL",
+      "Node.js"
+    ],
+    "min_experience": 2
+  }
+}

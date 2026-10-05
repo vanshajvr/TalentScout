@@ -1,0 +1,13 @@
+Daniel Okafor
+Lagos, Nigeria | daniel.okafor@example.com | +234 803 555 0199 | github.com/dokafor
+
+Experience
+Software Engineer (full-time) — PayGrid                        Feb 2020 – Jan 2024
+  Java / Spring Boot microservices for card settlement; MySQL; Dockerized CI.
+Freelance Android Developer (part-time, alongside PayGrid)    Mar 2021 – Dec 2022
+  Shipped 3 Kotlin apps for local retailers.
+
+Education
+B.Eng. Electrical Engineering, University of Lagos, 2019
+
+Skills: Java, Spring Boot, Kotlin, MySQL, Docker

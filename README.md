@@ -58,6 +58,19 @@ management.
   not the candidate's resume: candidates are screened for the role they
   applied to
 
+**Measured, not assumed: extraction evals**
+- An offline eval harness (`python -m evals.run`) scores both LLM extraction
+  steps against labeled cases, using the same code path production runs
+- Resume extraction is scored per field as correct / wrong / missed /
+  **hallucinated**, so an invented phone number or GitHub link is counted on
+  its own rather than hidden inside an accuracy figure
+- Current results on the seed set (`gpt-oss-120b`): 100% resume field
+  accuracy, 0% hallucination rate, 97.1% must-have-skill F1 on job
+  descriptions. The seed cases are synthetic; see
+  [evals/README.md](evals/README.md) for what that does and doesn't show
+- Supports comparing models (`--model`, `--provider ollama`) and a CI gate
+  (`--fail-under`)
+
 **Multi-tenant org model**
 - Organizations are isolated, one company's recruiters never see another
   company's candidates
@@ -114,6 +127,7 @@ management.
 ├── create_tables.py       # Fresh-schema creation script
 ├── seed_mcq_pool.py       # Seeds the technical MCQ question pool via LLM
 ├── migrations/            # One-off migration scripts (run as `python -m migrations.xyz`)
+├── evals/                 # Offline LLM extraction evals: labeled datasets, metrics, runner
 ├── db/
 │   ├── database.py        # SQLAlchemy session/engine setup
 │   └── models.py          # Candidate, Session, Message, GeneratedQuestion,
@@ -140,7 +154,8 @@ management.
 │   ├── schemas.py          # Shared Pydantic response models
 │   ├── constants.py        # Conversation step order, MCQ config
 │   ├── validators.py       # Name/email/phone/experience validation
-│   └── job_match.py        # Deterministic candidate-to-job fit scoring
+│   ├── job_match.py        # Deterministic candidate-to-job fit scoring
+│   └── extraction.py       # Resume/JD LLM extraction (shared by API routes and evals)
 └── static/
     ├── candidate/          # Candidate-facing chat UI + landing page
     ├── mcq/                 # MCQ assessment UI

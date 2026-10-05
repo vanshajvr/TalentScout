@@ -1,0 +1,17 @@
+{
+  "title": "Backend Engineer",
+  "description_file": "01_backend_explicit_sections.txt",
+  "notes": "Clearly separated sections; framework/database names should normalize.",
+  "expected": {
+    "must_have_skills": [
+      "Python",
+      "SQL",
+      "Docker"
+    ],
+    "nice_to_have_skills": [
+      "AWS",
+      "Kubernetes"
+    ],
+    "min_experience": 3
+  }
+}

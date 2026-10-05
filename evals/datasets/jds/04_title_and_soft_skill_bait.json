@@ -1,0 +1,15 @@
+{
+  "title": "Full Stack Engineer",
+  "description_file": "04_title_and_soft_skill_bait.txt",
+  "notes": "Soft skills must be excluded; nothing should be inferred from the 'Full Stack' title (e.g. SQL).",
+  "expected": {
+    "must_have_skills": [
+      "Node.js",
+      "React"
+    ],
+    "nice_to_have_skills": [
+      "Docker"
+    ],
+    "min_experience": null
+  }
+}

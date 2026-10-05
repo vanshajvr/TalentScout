@@ -1,0 +1,15 @@
+Tomás Alvarez — Senior Frontend Engineer
+Lisbon, Portugal | tomas.alvarez@example.com | +351 912 345 678 | linkedin.com/in/tomasalvarez
+
+Experience
+Senior Frontend Engineer, Northwind Media (Apr 2020 – Present)
+  Led migration of a 300k-LOC JavaScript codebase to TypeScript and Next.js.
+  Designed the GraphQL schema shared by web and mobile clients.
+Frontend Developer, Pixelcraft Studio (Sep 2016 – Mar 2020)
+  Built React component library; maintained Express BFF in Node.js.
+
+Education
+B.Sc. Informatics Engineering — Universidade de Lisboa, 2016
+
+Skills
+TypeScript, React, Next.js, GraphQL, Node.js, Express

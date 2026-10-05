@@ -1,0 +1,18 @@
+PRIYA RAMAN
+Austin, TX | priya.raman@example.com | +1 (415) 555-0142
+linkedin.com/in/priyaraman-dev | github.com/priyaraman
+
+EXPERIENCE
+Backend Engineer, Finlytics — Austin, TX                      Jan 2023 – Present
+- Built payment reconciliation services in Python (FastAPI) backed by PostgreSQL
+- Cut p95 API latency 40% by adding Redis caching for ledger lookups
+- Containerized 12 services with Docker; deployed to AWS Lambda and ECS
+
+Software Engineer Intern, Cobalt Labs — Remote                 May 2022 – Aug 2022
+- Wrote Django admin tooling for internal ops team
+
+EDUCATION
+B.S. Computer Science, University of Texas at Austin            2018 – 2022
+
+SKILLS
+Python, FastAPI, Django, PostgreSQL, Redis, Docker, AWS

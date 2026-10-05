@@ -3,10 +3,6 @@ import os
 import logging
 from datetime import datetime
 
-import pdfplumber
-from docx import Document as DocxDocument
-import json
-
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session as SQLASession
@@ -15,10 +11,10 @@ from db.database import get_db
 from db.models import Candidate, CandidateSession, Message, SessionLog, Organization, JobOpening
 from conversation import ConversationState, handle_user_input, get_bot_message
 from llm.groq_llm import GroqLLM
-from utils.constants import MCQ_SEEDED_TECHNOLOGIES
 from utils.validators import is_valid_email, is_valid_phone, is_valid_experience
 from utils.rate_limit import check_rate_limit
 from utils.job_match import apply_job_fit
+from utils.extraction import extract_resume_text, extract_resume_fields
 from deps import get_candidate_or_404, get_session_or_404
 
 router = APIRouter()
@@ -35,7 +31,6 @@ UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 MAX_RESUME_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB — generous for a resume, rejects egregious uploads
-MAX_RESUME_PDF_PAGES = 20  # any real resume is 1-3 pages; a page cap bounds extraction cost/time
 
 RESUME_FILE_SIGNATURES = {
     ".pdf": b"%PDF-",
@@ -77,45 +72,14 @@ class ConfirmResumeRequest(BaseModel):
     linkedin: str | None = Field(default=None, max_length=255)
     github: str | None = Field(default=None, max_length=255)
 
-def _extract_resume_text(file_path: str, ext: str) -> str:
-    if ext == ".pdf":
-        text_parts = []
-        with pdfplumber.open(file_path) as pdf:
-            for page in pdf.pages[:MAX_RESUME_PDF_PAGES]:
-                page_text = page.extract_text()
-                if page_text:
-                    text_parts.append(page_text)
-                for link in getattr(page, "hyperlinks", []):
-                    uri = link.get("uri", "")
-                    if uri:
-                        text_parts.append(f"[link: {uri}]")
-        return "\n".join(text_parts)
-    elif ext == ".docx":
-        doc = DocxDocument(file_path)
-        return "\n".join(p.text for p in doc.paragraphs)
-    return ""
-
 def _extract_resume_fields(resume_text: str, db: SQLASession, session_uuid: uuid.UUID) -> dict:
-    if not resume_text.strip():
-        return {}
-    prompt_template = _load_prompt("prompts/resume_extraction_prompt.txt")
-    prompt = prompt_template.format(
-        resume_text=resume_text[:6000],
-        canonical_technologies=", ".join(MCQ_SEEDED_TECHNOLOGIES),
-    )
     try:
-        raw = llm.generate(prompt, temperature=0, json_mode=True).strip()
-        if raw.startswith("```"):
-            raw = raw.strip("`").replace("json", "", 1).strip()
-        return json.loads(raw)
+        return extract_resume_fields(llm, resume_text)
     except Exception as e:
         logger.warning("Resume extraction failed: %s", e)
         _log_event(db, session_uuid, "llm_fallback", f"Resume extraction failed: {e}")
         return {}
-    
-def _load_prompt(path: str) -> str:
-    with open(os.path.join(BASE_DIR, path), "r") as f:
-        return f.read()
+
 
 
 def _sync_candidate_row(db: SQLASession, candidate_id: uuid.UUID, state: ConversationState) -> None:
@@ -309,7 +273,7 @@ def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession
     candidate_row.resume_path = dest_path
     db.commit()
 
-    resume_text = _extract_resume_text(dest_path, ext)
+    resume_text = extract_resume_text(dest_path, ext)
     extracted = _extract_resume_fields(resume_text, db, session_uuid)
     candidate_row.resume_text = resume_text
     state.pending_resume_data = extracted

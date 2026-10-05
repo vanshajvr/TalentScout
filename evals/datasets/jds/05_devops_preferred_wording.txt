@@ -1,0 +1,3 @@
+Minimum 4 years in infrastructure or SRE roles.
+Required: Kubernetes, Terraform, AWS.
+Preferred: Go, Prometheus.

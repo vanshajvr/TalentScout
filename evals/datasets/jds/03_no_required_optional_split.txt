@@ -1,0 +1,2 @@
+As a Data Engineer you'll build and run our batch and streaming pipelines.
+Day to day you'll work with Spark, Airflow, SQL and Python, all running on AWS.

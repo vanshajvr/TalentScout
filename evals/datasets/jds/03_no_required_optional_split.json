@@ -1,0 +1,16 @@
+{
+  "title": "Data Engineer",
+  "description_file": "03_no_required_optional_split.txt",
+  "notes": "No required/optional distinction: listed skills default to must-have. No experience stated.",
+  "expected": {
+    "must_have_skills": [
+      "Spark",
+      "Airflow",
+      "SQL",
+      "Python",
+      "AWS"
+    ],
+    "nice_to_have_skills": [],
+    "min_experience": null
+  }
+}

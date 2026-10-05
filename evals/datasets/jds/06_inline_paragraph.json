@@ -1,0 +1,15 @@
+{
+  "title": "Java Developer",
+  "description_file": "06_inline_paragraph.txt",
+  "notes": "Requirements buried in a single sentence.",
+  "expected": {
+    "must_have_skills": [
+      "Java",
+      "SQL"
+    ],
+    "nice_to_have_skills": [
+      "Kafka"
+    ],
+    "min_experience": 2
+  }
+}

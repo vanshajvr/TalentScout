@@ -1,0 +1,14 @@
+About the role
+Join our payments platform team building high-throughput APIs.
+
+Requirements
+- 3+ years of professional backend experience
+- Strong Python (FastAPI or Django)
+- PostgreSQL schema design and query tuning
+- Docker in development and production
+
+Nice to have
+- AWS (ECS, Lambda)
+- Kubernetes
+
+You are a clear communicator who enjoys mentoring.

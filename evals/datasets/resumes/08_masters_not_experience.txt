@@ -1,0 +1,14 @@
+ROHAN DESHPANDE
+Embedded Software Engineer | Pune, India | rohan.deshpande@example.com | +91 99220 11223
+linkedin.com/in/rohan-deshpande-embedded
+
+PROFESSIONAL EXPERIENCE
+Voltix Motors — Embedded Software Engineer                     Jul 2022 – Present
+  Battery-management firmware in C and C++ on FreeRTOS; Python test harnesses.
+
+EDUCATION
+M.Tech, Embedded Systems — IIT Bombay                           2020 – 2022
+B.E., Electronics & Telecommunication — Pune University         2016 – 2020
+
+SKILLS
+C, C++, FreeRTOS, Python

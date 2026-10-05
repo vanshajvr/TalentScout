@@ -1,0 +1,7 @@
+Kevin Osei
+kevin.osei@example.com
+
+QA Engineer, Helix Health — Jun 2024 to May 2026
+Wrote and maintained Selenium end-to-end suites in Java; validated reporting queries in SQL.
+
+Skills: Selenium, Java, SQL, test planning

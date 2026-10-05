@@ -1,0 +1,3 @@
+We're hiring a Frontend Engineer with 2-4 years of experience.
+You must be fluent in React and TypeScript.
+Bonus points for GraphQL or Node.js experience.

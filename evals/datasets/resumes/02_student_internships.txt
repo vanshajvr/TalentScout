@@ -1,0 +1,19 @@
+Arjun Nair
+New Delhi, India · arjun.nair2027@gmail.com · +91 98765 43210
+LinkedIn: linkedin.com/in/arjun-nair-27 · GitHub: github.com/arjunnair
+
+EDUCATION
+B.Tech, Computer Science and Engineering — Delhi Technological University   2023 – 2027 (expected)
+CGPA: 8.7/10
+
+INTERNSHIPS
+Machine Learning Intern — Quantix AI, Gurugram                    Jun 2025 – Aug 2025
+- Fine-tuned PyTorch image classifiers; wrote data pipelines in Python
+Web Development Intern — Brightpath Edtech, Remote                Dec 2024 – Feb 2025
+- Built React dashboards in JavaScript over a MySQL backend
+
+PROJECTS
+- CampusRide: campus carpool app built with React
+
+SKILLS
+Python, PyTorch, JavaScript, React, MySQL

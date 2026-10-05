@@ -1,0 +1,21 @@
+{
+  "resume_file": "08_masters_not_experience.txt",
+  "as_of": "2026-10-01",
+  "notes": "Six years of degrees directly above the job; only the job counts (~4.25 yrs). Most recent degree is the M.Tech.",
+  "expected": {
+    "email": "rohan.deshpande@example.com",
+    "phone": "+91 99220 11223",
+    "location": "Pune, India",
+    "experience": 4.25,
+    "role": "Embedded Software Engineer at Voltix Motors",
+    "education": "M.Tech Embedded Systems, IIT Bombay",
+    "linkedin": "https://linkedin.com/in/rohan-deshpande-embedded",
+    "github": null,
+    "tech_stack": [
+      "C",
+      "C++",
+      "FreeRTOS",
+      "Python"
+    ]
+  }
+}

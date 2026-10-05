@@ -1,0 +1,17 @@
+SARA LINDQVIST
+DevOps Engineer — Stockholm, Sweden
+sara.lindqvist@example.com · +46 70 123 45 67
+github.com/saralq · linkedin.com/in/sara-lindqvist
+
+WORK
+Kumo Cloud — DevOps Engineer                                 Aug 2021 – Present
+  Run 30+ Kubernetes clusters on AWS (EKS), all provisioned with Terraform.
+  Wrote Go operators for automated failover; Prometheus/Grafana alerting.
+Nordbank — Systems Administrator                             Jan 2018 – Jul 2021
+  Python automation for Linux fleet patching; introduced Docker to the team.
+
+EDUCATION
+B.Sc. Computer Engineering, KTH Royal Institute of Technology (2017)
+
+SKILLS
+Kubernetes · Terraform · AWS · Docker · Go · Python · Prometheus

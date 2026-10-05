@@ -1,0 +1,8 @@
+We need someone who can own features end to end.
+
+What you bring:
+- Node.js on the backend
+- React on the frontend
+- Excellent communication, ownership mindset, and strong problem solving
+
+Docker familiarity is a plus.

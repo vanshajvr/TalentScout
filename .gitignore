@@ -4,3 +4,8 @@ __pycache__/
 uploads/
 .env
 .env.test
+
+# Eval run reports (python -m evals.run --save)
+evals/results/
+# Real (non-synthetic) eval cases contain candidate PII — never commit them
+evals/datasets/**/private_*

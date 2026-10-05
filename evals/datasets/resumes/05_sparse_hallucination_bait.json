@@ -1,0 +1,20 @@
+{
+  "resume_file": "05_sparse_hallucination_bait.txt",
+  "as_of": "2026-10-01",
+  "notes": "Deliberately sparse. Phone, location, education and both profile links are absent: any value is a hallucination.",
+  "expected": {
+    "email": "kevin.osei@example.com",
+    "phone": null,
+    "location": null,
+    "experience": 2.0,
+    "role": "QA Engineer at Helix Health",
+    "education": null,
+    "linkedin": null,
+    "github": null,
+    "tech_stack": [
+      "Selenium",
+      "Java",
+      "SQL"
+    ]
+  }
+}

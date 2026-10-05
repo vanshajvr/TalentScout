@@ -16,7 +16,8 @@ from utils.constants import (
     MCQ_TECHNICAL_TIME_LIMIT_SECONDS, MCQ_OPEN_TEXT_MAX_CHARS, MCQ_DIFFICULTY_TIERS,
     BEHAVIORAL_QUESTION_TEMPLATES, MCQ_SEEDED_TECHNOLOGIES,
 )
-from routers.candidate import _difficulty_tier, _load_prompt, _mark_step, _log_event
+from routers.candidate import _difficulty_tier, _mark_step, _log_event
+from utils.extraction import load_prompt
 from utils.llm_json import parse_llm_json
 from utils.job_match import normalize_skill
 from llm.groq_llm import GroqLLM
@@ -190,7 +191,7 @@ def _valid_options_shape(options) -> bool:
 
 
 def _generate_behavioral_question(db: SQLASession, session_uuid: uuid.UUID, candidate, role: str | None, already_asked: list[str], dimension: str) -> dict:
-    prompt_template = _load_prompt("prompts/behavioral_mcq_prompt.txt")
+    prompt_template = load_prompt("prompts/behavioral_mcq_prompt.txt")
     prompt = prompt_template.format(
         role=role or "the applied role",
         experience=candidate.experience if candidate.experience is not None else "unspecified",

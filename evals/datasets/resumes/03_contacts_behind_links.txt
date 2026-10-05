@@ -1,0 +1,18 @@
+MEERA KRISHNAN
+Data Engineer · Bengaluru, India · +91 80 4123 5678
+Email | LinkedIn | GitHub
+
+EXPERIENCE
+Data Engineer — Streamline Retail                                   Mar 2021 – Feb 2025
+• Owned 40+ Airflow DAGs moving 2 TB/day from Postgres into an S3 data lake
+• Rewrote nightly batch jobs in Spark, cutting runtime from 6h to 50m
+Business Analyst — Gupta & Co. Consulting                          Jul 2019 – Feb 2021
+• SQL reporting and pandas-based forecasting for retail clients
+
+EDUCATION
+M.Sc. Statistics, University of Hyderabad                           2017 – 2019
+
+SKILLS: SQL, Python (pandas), Apache Airflow, Apache Spark, AWS (S3, Glue)
+[link: mailto:meera.k@outlook.com]
+[link: https://www.linkedin.com/in/meera-krishnan/]
+[link: https://github.com/meerak]
