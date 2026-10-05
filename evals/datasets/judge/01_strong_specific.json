@@ -1,0 +1,11 @@
+{
+  "role": "Backend Engineer",
+  "question": "What draws you to the Backend Engineer role, and where do you see it fitting into your career goals?",
+  "answer": "At my internship I rebuilt a flaky payments retry queue and loved hunting down the race condition behind it. Backend is where correctness matters most to users. In 3-5 years I want to own reliability for a core service and mentor juniors.",
+  "expected": {
+    "relevance": 5,
+    "specificity": 5,
+    "clarity": 5
+  },
+  "notes": "Concrete project, clear motivation, explicit career goal."
+}

@@ -1,0 +1,12 @@
+{
+  "role": "Backend Engineer",
+  "question": "What led you to choose your field of study, and how has it shaped the way you approach backend engineer work?",
+  "answer": "I chose computer science because it has good scope and I was good at maths. It taught me logical thinking which helps me in coding.",
+  "expected": {
+    "relevance": 4,
+    "specificity": 2,
+    "clarity": 5
+  },
+  "notes": "Answers both parts, but reasons are generic.",
+  "label_revision": "v2 rubric (clarity = readability only; manipulation flagged separately): clarity 4->5"
+}

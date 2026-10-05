@@ -635,3 +635,18 @@ button:disabled {
 .fit-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
 .fit-card-head { display: flex; align-items: center; gap: 10px; font-weight: 500; color: var(--text); }
 .fit-card-summary { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+/* --- Open-text judge --- */
+.judge-block { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); font-size: 12.5px; }
+.judge-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.judge-chip { padding: 2px 9px; border-radius: 20px; background: var(--panel); border: 1px solid var(--border); color: var(--muted); }
+.judge-chip strong { color: var(--text); }
+.judge-overall { font-weight: 600; color: var(--text); margin-left: 4px; }
+.judge-rationale { color: var(--text); margin-top: 8px; line-height: 1.5; }
+.judge-source, .judge-note { color: var(--muted); margin-top: 6px; display: inline-block; }
+.judge-link { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12.5px; padding: 0 0 0 8px; }
+.judge-link:disabled { color: var(--muted); cursor: default; }
+.judge-edit { gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.judge-edit label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+.judge-edit select { padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: #fdf9f2; color: var(--text); }
+.judge-flag { color: var(--warn); background: #f8ead9; border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; display: flex; gap: 6px; align-items: center; }

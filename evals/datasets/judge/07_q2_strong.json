@@ -1,0 +1,11 @@
+{
+  "role": "Backend Engineer",
+  "question": "What led you to choose your field of study, and how has it shaped the way you approach backend engineer work?",
+  "answer": "I chose electrical engineering because I loved debugging circuits with my father. Tracing a fault from symptom to cause is exactly how I handle backend incidents now: read the logs first, form hypotheses second, change code last.",
+  "expected": {
+    "relevance": 5,
+    "specificity": 5,
+    "clarity": 5
+  },
+  "notes": "Answers both halves with a concrete link."
+}

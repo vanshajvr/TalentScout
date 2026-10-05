@@ -1,0 +1,12 @@
+{
+  "role": "Backend Engineer",
+  "question": "What draws you to the Backend Engineer role, and where do you see it fitting into your career goals?",
+  "answer": "Money and growth.",
+  "expected": {
+    "relevance": 2,
+    "specificity": 1,
+    "clarity": 5
+  },
+  "notes": "Technically an answer, with no substance.",
+  "label_revision": "v2 rubric (clarity = readability only; manipulation flagged separately): clarity 3->5"
+}

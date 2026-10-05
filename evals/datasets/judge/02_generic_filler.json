@@ -1,0 +1,12 @@
+{
+  "role": "Backend Engineer",
+  "question": "What draws you to the Backend Engineer role, and where do you see it fitting into your career goals?",
+  "answer": "I am very passionate about technology and want to grow my career in a good company. Backend is interesting and has good opportunities for the future.",
+  "expected": {
+    "relevance": 3,
+    "specificity": 1,
+    "clarity": 5
+  },
+  "notes": "Readable but says nothing specific to this person.",
+  "label_revision": "v2 rubric (clarity = readability only; manipulation flagged separately): clarity 4->5"
+}

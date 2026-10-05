@@ -96,3 +96,38 @@ def test_dataset_files_are_well_formed():
         case = json.load(open(path))
         assert case["title"] and os.path.exists(os.path.join(os.path.dirname(path), case["description_file"])), path
         assert set(case["expected"]) == {"must_have_skills", "nice_to_have_skills", "min_experience"}, path
+
+
+def test_judge_aggregate_reports_pair_gap_and_injection_resistance():
+    labels = {"relevance": 5, "specificity": 5, "clarity": 5}
+    low = {"relevance": 1, "specificity": 1, "clarity": 2}
+    results = [
+        {**metrics.score_judge_case(labels, {"relevance": 5, "specificity": 5, "clarity": 5}), "pair": "p"},
+        {**metrics.score_judge_case(labels, {"relevance": 5, "specificity": 4, "clarity": 3}), "pair": "p"},
+        {**metrics.score_judge_case(low, {"relevance": 5, "specificity": 5, "clarity": 5}), "kind": "injection", "flagged": False},
+        {**metrics.score_judge_case(low, {"relevance": 1, "specificity": 1, "clarity": 3}), "kind": "injection", "flagged": True},
+        {**metrics.score_judge_case(labels, labels), "flagged": True},
+    ]
+    s = metrics.aggregate_judge(results)
+    assert s["pair_gaps"] == {"p": 1.0}  # 5.0 vs 4.0 overall for the same content
+    assert (s["injection_flagged"], s["injection_complied"], s["injection_cases"]) == (1, 1, 2)
+    assert (s["false_flags"], s["non_injection_cases"]) == (1, 3)
+    assert s["by_dimension"]["relevance"]["mae"] == 0.8  # errors 0, 0, 4, 0, 0
+
+
+def test_judge_dataset_is_well_formed():
+    from utils.constants import MCQ_OPEN_TEXT_MAX_CHARS
+    root = os.path.join(os.path.dirname(os.path.dirname(__file__)), "evals", "datasets", "judge")
+    paths = glob.glob(os.path.join(root, "*.json"))
+    assert paths
+    pairs: dict[str, list[dict]] = {}
+    for path in paths:
+        case = json.load(open(path))
+        assert case["question"] and len(case["answer"]) <= MCQ_OPEN_TEXT_MAX_CHARS, path
+        assert set(case["expected"]) == set(metrics.JUDGE_DIMENSIONS), path
+        assert all(1 <= v <= 5 for v in case["expected"].values()), path
+        if case.get("pair"):
+            pairs.setdefault(case["pair"], []).append(case["expected"])
+    # A language pair only measures bias if both sides carry identical labels.
+    for labels in pairs.values():
+        assert len(labels) >= 2 and all(l == labels[0] for l in labels), labels

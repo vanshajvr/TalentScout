@@ -15,6 +15,7 @@ let selectedIds = new Set();
 let candidatesById = new Map();
 let jobsCache = [];
 let orgSlug = null;
+let responsesCandidateId = null;
 
 const jobList = document.getElementById("job-list");
 const jobTitleInput = document.getElementById("job-title");
@@ -166,6 +167,7 @@ async function loadCandidateQuestions(candidateId) {
     responsesList.innerHTML = "";
     return;
   }
+  responsesCandidateId = candidateId;
   responsesList.innerHTML = '<div class="empty-note">Loading…</div>';
   const res = await authedFetch(`${API}/recruiter/candidates/${candidateId}/questions`);
   const data = await res.json();
@@ -376,6 +378,10 @@ function renderMcqResults(mcq) {
       <div class="qa-summary-label">Duration</div>
     </div>
     <div class="qa-summary-stat">
+      <div class="qa-summary-value">${mcq.open_text_avg != null ? mcq.open_text_avg + " / 5" : "—"}</div>
+      <div class="qa-summary-label">Written answers</div>
+    </div>
+    <div class="qa-summary-stat">
       <div class="qa-summary-value${flagged ? " flag-warn" : ""}">${mcq.tab_switch_count} / ${mcq.fullscreen_exit_count}</div>
       <div class="qa-summary-label">Tab switches / FS exits</div>
     </div>
@@ -395,6 +401,7 @@ function renderMcqResults(mcq) {
 
     if (q.question_type === "open_text") {
       html += `<div class="qa-answer">${escapeHtml(q.text_response) || "(no response recorded)"}</div>`;
+      html += `<div class="judge-block" data-question-index="${q.question_index}"></div>`;
     } else if (q.options) {
       q.options.forEach((opt) => {
         let cls = "qa-option-row";
@@ -412,8 +419,91 @@ function renderMcqResults(mcq) {
     }
 
     div.innerHTML = html;
+    if (q.question_type === "open_text" && q.judge) {
+      renderJudgeBlock(div.querySelector(".judge-block"), q.question_index, q.judge);
+    }
     responsesList.appendChild(div);
   });
+}
+
+function capitalize(s) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+async function gradeCandidateAnswers(force) {
+  const res = await authedFetch(`${API}/recruiter/candidates/${responsesCandidateId}/judge?force=${force}`, { method: "POST" });
+  if (!res.ok) {
+    alert(formatError(await res.json().catch(() => ({}))));
+    return;
+  }
+  const data = await res.json();
+  if (data.failed) alert(`${data.failed} answer(s) couldn't be graded — the AI service may be unavailable. Try again shortly.`);
+  loadCandidateQuestions(responsesCandidateId);
+}
+
+function renderJudgeBlock(el, questionIndex, judge) {
+  if (judge.status === "unanswered") {
+    el.remove();
+    return;
+  }
+  if (judge.status === "pending" || judge.status === "failed") {
+    el.innerHTML = `
+      <span class="judge-note">${judge.status === "pending" ? "AI grading in progress…" : "AI grading failed."}</span>
+      <button class="judge-link" data-action="grade">${judge.status === "pending" ? "Grade now" : "Retry"}</button>
+    `;
+    el.querySelector('[data-action="grade"]').addEventListener("click", (e) => {
+      e.target.disabled = true;
+      e.target.textContent = "Grading…";
+      gradeCandidateAnswers(false);
+    });
+    return;
+  }
+
+  const chips = judge.dimensions
+    .map((d) => `<span class="judge-chip">${capitalize(d)} <strong>${judge.scores[d]}</strong></span>`)
+    .join("");
+  const source = judge.status === "overridden"
+    ? `Overridden by a recruiter · AI scored ${judge.dimensions.map((d) => judge.ai_scores ? judge.ai_scores[d] : "—").join("/")}`
+    : `AI-graded${judge.model ? ` (${escapeHtml(judge.model)})` : ""} · advisory`;
+  el.innerHTML = `
+    ${judge.manipulation_attempt ? '<div class="judge-flag"><i class="ti ti-alert-triangle"></i> This answer appears to try to instruct the AI grader. Its scores cover only the genuine content — worth a manual read.</div>' : ""}
+    <div class="judge-chips">${chips}<span class="judge-overall">${judge.overall} / 5</span></div>
+    ${judge.rationale ? `<div class="judge-rationale">${escapeHtml(judge.rationale)}</div>` : ""}
+    <div class="judge-source">${source}
+      <button class="judge-link" data-action="edit">Override</button>
+      ${judge.status === "overridden" ? '<button class="judge-link" data-action="revert">Revert to AI</button>' : ""}
+    </div>
+    <div class="judge-edit" style="display:none;">
+      ${judge.dimensions.map((d) => `
+        <label>${capitalize(d)}
+          <select data-dim="${d}">${[1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${judge.scores[d] === n ? "selected" : ""}>${n}</option>`).join("")}</select>
+        </label>`).join("")}
+      <button class="judge-link" data-action="save">Save</button>
+    </div>
+  `;
+
+  const saveOverride = async (scores) => {
+    const res = await authedFetch(`${API}/recruiter/candidates/${responsesCandidateId}/answers/${questionIndex}/override`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scores }),
+    });
+    if (!res.ok) {
+      alert(formatError(await res.json().catch(() => ({}))));
+      return;
+    }
+    loadCandidateQuestions(responsesCandidateId);
+  };
+
+  el.querySelector('[data-action="edit"]').addEventListener("click", () => {
+    el.querySelector(".judge-edit").style.display = "flex";
+  });
+  el.querySelector('[data-action="save"]').addEventListener("click", () => {
+    const scores = {};
+    el.querySelectorAll(".judge-edit select").forEach((sel) => (scores[sel.dataset.dim] = Number(sel.value)));
+    saveOverride(scores);
+  });
+  el.querySelector('[data-action="revert"]')?.addEventListener("click", () => saveOverride(null));
 }
 
 function renderLegacyQuestions(questions) {

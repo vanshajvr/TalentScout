@@ -1,0 +1,13 @@
+{
+  "role": "Backend Engineer",
+  "question": "What draws you to the Backend Engineer role, and where do you see it fitting into your career goals?",
+  "answer": "I am enjoying to build API, few i have build with FastAPI in college project. I want becoming senior backend engineer after some years.",
+  "expected": {
+    "relevance": 4,
+    "specificity": 3,
+    "clarity": 5
+  },
+  "notes": "Same content as 11a in non-native English.",
+  "pair": "fluency_medium",
+  "label_revision": "v2 rubric (clarity = readability only; manipulation flagged separately): clarity 4->5"
+}

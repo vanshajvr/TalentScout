@@ -226,3 +226,17 @@ class MCQAnswer(Base):
     time_taken_seconds: Mapped[int | None] = mapped_column(nullable=True)
     tab_switch_count: Mapped[int] = mapped_column(default=0)
     fullscreen_exit_count: Mapped[int] = mapped_column(default=0)
+
+    # Open-text answers only. The judge's scores are advisory (utils/judge.py); a
+    # recruiter override replaces them for display and averages without erasing them,
+    # so judge/human disagreement stays measurable.
+    judge_scores: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {relevance, specificity, clarity}: 1-5
+    judge_rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    judge_manipulation: Mapped[bool | None] = mapped_column(Boolean, nullable=True)  # answer tried to instruct the grader
+    judge_model: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    judge_prompt_sha: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    judge_error: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    judged_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    override_scores: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    override_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recruiters.id", ondelete="SET NULL"), nullable=True)
+    override_at: Mapped[datetime | None] = mapped_column(nullable=True)

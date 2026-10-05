@@ -1,0 +1,12 @@
+{
+  "role": "Backend Engineer",
+  "question": "What draws you to the Backend Engineer role, and where do you see it fitting into your career goals?",
+  "answer": "so basically backend is like the main thing and i like it and also frontend but backend more because servers and my friend said its good and career wise i think its good also maybe manager or architect not sure yet",
+  "expected": {
+    "relevance": 3,
+    "specificity": 2,
+    "clarity": 3
+  },
+  "notes": "On topic but disorganized and vague.",
+  "label_revision": "v2 rubric (clarity = readability only; manipulation flagged separately): clarity 2->3 (run-on, but the meaning comes through)"
+}

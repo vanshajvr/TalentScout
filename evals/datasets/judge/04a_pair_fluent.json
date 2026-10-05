@@ -1,0 +1,12 @@
+{
+  "role": "Backend Engineer",
+  "question": "What draws you to the Backend Engineer role, and where do you see it fitting into your career goals?",
+  "answer": "In my last internship I fixed a payment retry queue that was failing randomly. I really enjoy finding bugs like that because users' money depends on them, and backend is where I get to do it daily. In five years I want to lead reliability for a core service.",
+  "expected": {
+    "relevance": 5,
+    "specificity": 5,
+    "clarity": 5
+  },
+  "notes": "Fluent version of 04b.",
+  "pair": "fluency_strong"
+}

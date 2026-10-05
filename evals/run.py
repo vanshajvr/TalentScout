@@ -3,6 +3,7 @@ Offline eval harness for the LLM extraction pipelines.
 
     python -m evals.run                       # both suites, production model
     python -m evals.run resume --verbose      # one suite, print every case
+    python -m evals.run judge                 # open-text judge vs. human labels
     python -m evals.run jd --model llama-3.3-70b-versatile --save
     python -m evals.run --provider ollama --model llama3 --save
     python -m evals.run --fail-under 0.85     # non-zero exit below threshold (CI)
@@ -29,6 +30,7 @@ from evals import metrics  # noqa: E402
 from utils.extraction import (  # noqa: E402
     BASE_DIR, extract_job_requirements, extract_resume_fields, extract_resume_text,
 )
+from utils.judge import JUDGE_PROMPT_PATH, judge_open_text  # noqa: E402
 
 EVALS_DIR = os.path.join(BASE_DIR, "evals")
 DATASETS_DIR = os.path.join(EVALS_DIR, "datasets")
@@ -132,6 +134,32 @@ def run_jd_suite(llm, only: str | None) -> dict:
     return {"cases": results, "summary": {**metrics.aggregate_jd(scored), **_run_stats(results)}}
 
 
+def run_judge_suite(llm, only: str | None) -> dict:
+    cases = _load_cases(os.path.join(DATASETS_DIR, "judge"), only)
+    results = []
+    for case in cases:
+        started = time.perf_counter()
+        try:
+            judged = judge_open_text(llm, case["question"], case["answer"], case.get("role"))
+            predicted, rationale, flagged, error = judged["scores"], judged["rationale"], judged["manipulation_attempt"], None
+        except Exception as e:
+            predicted, rationale, flagged, error = {}, None, None, f"{type(e).__name__}: {e}"
+        latency = time.perf_counter() - started
+
+        result = {
+            "id": case["id"], "latency_s": round(latency, 2), "error": error,
+            "predicted": predicted, "rationale": rationale, "flagged": flagged, "expected": case["expected"],
+            "pair": case.get("pair"), "kind": case.get("kind"),
+        }
+        if error is None:
+            result.update(metrics.score_judge_case(case["expected"], predicted))
+        results.append(result)
+        _print_judge_case(result)
+
+    scored = [r for r in results if r["error"] is None]
+    return {"cases": results, "summary": {**metrics.aggregate_judge(scored), **_run_stats(results)}}
+
+
 def _run_stats(results: list[dict]) -> dict:
     latencies = sorted(r["latency_s"] for r in results)
     return {
@@ -185,6 +213,35 @@ def _print_jd_case(r: dict) -> None:
         print(f"      {line}")
 
 
+def _print_judge_case(r: dict) -> None:
+    if r["error"]:
+        print(f"  ✗ {r['id']}  ERROR {r['error']}")
+        return
+    off = {d: e for d, e in r["abs_error"].items() if e > 1}
+    flag_wrong = bool(r["flagged"]) != (r.get("kind") == "injection")
+    tag = f" [{r['kind']}]" if r.get("kind") else (f" [pair {r['pair']}]" if r.get("pair") else "")
+    flag = "  FLAGGED" if r["flagged"] else ""
+    print(f"  {'✗' if off or flag_wrong else '✓'} {r['id']}{tag}{flag}  ({r['latency_s']}s)")
+    if off or flag_wrong or VERBOSE:
+        exp = "/".join(str(r["expected"][d]) for d in metrics.JUDGE_DIMENSIONS)
+        got = "/".join(str(r["predicted"][d]) for d in metrics.JUDGE_DIMENSIONS)
+        print(f"      rel/spec/clar expected={exp} got={got}")
+        print(f"      rationale: {r['rationale']}")
+
+
+def _print_judge_summary(s: dict) -> None:
+    print("\n  Open-text judge (vs. human labels)")
+    print(f"    within-1 agreement  {_pct(s['within_1_agreement'])}   exact {_pct(s['exact_agreement'])}")
+    for d, v in s["by_dimension"].items():
+        mae = "—" if v["mae"] is None else f"{v['mae']:.2f}"
+        print(f"      {d:<12} MAE {mae}   within-1 {_pct(v['within_1'])}")
+    gaps = ", ".join(f"{p}: {g}" for p, g in s["pair_gaps"].items()) or "—"
+    print(f"    language-pair gaps  {gaps}   (same content, different English; 0 = no bias)")
+    print(f"    injection flagged   {s['injection_flagged']}/{s['injection_cases']}   complied {s['injection_complied']}"
+          f"   false flags {s['false_flags']}/{s['non_injection_cases']}")
+    print(f"    {s['cases']} cases, {s['errors']} errors, latency p50 {s['latency_p50_s']}s / max {s['latency_max_s']}s")
+
+
 def _print_resume_summary(s: dict) -> None:
     print("\n  Resume extraction")
     print(f"    field accuracy      {_pct(s['field_accuracy'])}   ({s['outcomes']['correct']} correct, "
@@ -212,6 +269,8 @@ def _headline(suite: str, summary: dict) -> float | None:
     """The single number --fail-under checks, per suite."""
     if suite == "resume":
         return summary["field_accuracy"]
+    if suite == "judge":
+        return summary["within_1_agreement"]
     return summary["must_have"]["f1"]
 
 
@@ -220,19 +279,20 @@ def _headline(suite: str, summary: dict) -> float | None:
 def main() -> int:
     global VERBOSE
     parser = argparse.ArgumentParser(description="Run TalentScout's LLM extraction evals.")
-    parser.add_argument("suite", nargs="?", choices=["resume", "jd", "all"], default="all")
+    parser.add_argument("suite", nargs="?", choices=["resume", "jd", "judge", "all"], default="all")
     parser.add_argument("--provider", choices=["groq", "ollama"], default="groq")
     parser.add_argument("--model", help=f"model name (default: {DEFAULT_GROQ_MODEL} on groq, llama3 on ollama)")
     parser.add_argument("--case", help="only run cases whose id contains this string")
     parser.add_argument("--save", action="store_true", help="write a JSON report to evals/results/")
     parser.add_argument("--fail-under", type=float, metavar="X",
-                        help="exit 1 if resume field accuracy or JD must-have F1 is below X (0-1), or any case errors")
+                        help="exit 1 if resume field accuracy, JD must-have F1 or judge within-1 agreement "
+                             "is below X (0-1), or any case errors")
     parser.add_argument("--verbose", "-v", action="store_true")
     args = parser.parse_args()
     VERBOSE = args.verbose
 
     llm = _build_llm(args.provider, args.model)
-    suites = ["resume", "jd"] if args.suite == "all" else [args.suite]
+    suites = ["resume", "jd", "judge"] if args.suite == "all" else [args.suite]
     print(f"Model: {args.provider}/{llm.model_name}")
 
     report = {
@@ -249,10 +309,14 @@ def main() -> int:
             result = run_resume_suite(llm, args.case)
             result["prompt_sha"] = _prompt_hash("prompts/resume_extraction_prompt.txt")
             _print_resume_summary(result["summary"])
-        else:
+        elif suite == "jd":
             result = run_jd_suite(llm, args.case)
             result["prompt_sha"] = _prompt_hash("prompts/jd_extraction_prompt.txt")
             _print_jd_summary(result["summary"])
+        else:
+            result = run_judge_suite(llm, args.case)
+            result["prompt_sha"] = _prompt_hash(JUDGE_PROMPT_PATH)
+            _print_judge_summary(result["summary"])
         report["suites"][suite] = result
 
         if args.fail_under is not None:

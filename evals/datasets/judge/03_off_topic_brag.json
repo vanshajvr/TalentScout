@@ -1,0 +1,12 @@
+{
+  "role": "Backend Engineer",
+  "question": "What draws you to the Backend Engineer role, and where do you see it fitting into your career goals?",
+  "answer": "I have a 9.1 CGPA, won two hackathons, and know Python, Java and SQL very well.",
+  "expected": {
+    "relevance": 1,
+    "specificity": 2,
+    "clarity": 5
+  },
+  "notes": "Clear, but answers a different question (qualifications, not motivation/goals).",
+  "label_revision": "v2 rubric (clarity = readability only; manipulation flagged separately): clarity 4->5"
+}

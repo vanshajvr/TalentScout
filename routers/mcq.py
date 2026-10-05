@@ -1,15 +1,16 @@
+import logging
 import random
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as SQLASession
 
-from db.database import get_db
-from db.models import MCQAssessment, MCQAnswer, MCQQuestion, JobOpening
+from db.database import get_db, SessionLocal
+from db.models import MCQAssessment, MCQAnswer, MCQQuestion, JobOpening, CandidateSession, Candidate
 from deps import get_session_or_404, get_candidate_or_404
 from utils.constants import (
     MCQ_TECHNICAL_COUNT, MCQ_BEHAVIORAL_COUNT, MCQ_TOTAL_COUNT,
@@ -20,9 +21,11 @@ from routers.candidate import _difficulty_tier, _mark_step, _log_event
 from utils.extraction import load_prompt
 from utils.llm_json import parse_llm_json
 from utils.job_match import normalize_skill
+from utils.judge import judge_open_text, judge_prompt_sha
 from llm.groq_llm import GroqLLM
 
 router = APIRouter(prefix="/sessions/{session_id}/mcq")
+logger = logging.getLogger(__name__)
 
 llm = GroqLLM()
 
@@ -95,6 +98,50 @@ def _assessment_technologies(candidate, job: JobOpening | None) -> list[str] | N
 
 def _screening_role(candidate, job: JobOpening | None) -> str | None:
     return job.title if job is not None else candidate.role
+
+
+def judge_and_store(db: SQLASession, answer: MCQAnswer, candidate) -> bool:
+    """Grades one open-text answer and stores the result on it (caller commits).
+    Returns False on failure, recording why so the recruiter UI can offer a retry
+    instead of showing a silently missing score."""
+    job = db.get(JobOpening, candidate.job_id) if candidate.job_id else None
+    try:
+        result = judge_open_text(llm, answer.question_text, answer.text_response or "", _screening_role(candidate, job))
+    except Exception as e:
+        logger.warning("Open-text judging failed for answer %s: %s", answer.id, e)
+        answer.judge_error = f"{type(e).__name__}: {e}"[:255]
+        return False
+    answer.judge_scores = result["scores"]
+    answer.judge_rationale = result["rationale"]
+    answer.judge_manipulation = result["manipulation_attempt"]
+    answer.judge_model = llm.model_name
+    answer.judge_prompt_sha = judge_prompt_sha()
+    answer.judge_error = None
+    answer.judged_at = datetime.utcnow()
+    return True
+
+
+def _judge_answer_in_background(answer_id: uuid.UUID) -> None:
+    """Runs after the response is sent, so the candidate never waits on the LLM. Opens
+    its own DB session — the request's session is closed by the time this runs."""
+    db = SessionLocal()
+    try:
+        answer = db.get(MCQAnswer, answer_id)
+        if answer is None or answer.judge_scores is not None:
+            return
+        candidate = (
+            db.query(Candidate)
+            .join(CandidateSession, CandidateSession.candidate_id == Candidate.id)
+            .join(MCQAssessment, MCQAssessment.session_id == CandidateSession.id)
+            .filter(MCQAssessment.id == answer.assessment_id)
+            .first()
+        )
+        if candidate is None:
+            return
+        judge_and_store(db, answer, candidate)
+        db.commit()
+    finally:
+        db.close()
 
 
 def _tech_for_index(tech_stack: list[str] | None, index: int) -> str:
@@ -383,7 +430,9 @@ def get_current_question(session_id: str, db: SQLASession = Depends(get_db)):
 
 
 @router.post("/answer", response_model=MCQQuestionResponse)
-def submit_answer(session_id: str, body: MCQAnswerRequest, db: SQLASession = Depends(get_db)):
+def submit_answer(
+    session_id: str, body: MCQAnswerRequest, background_tasks: BackgroundTasks, db: SQLASession = Depends(get_db),
+):
     session_uuid, session_row, candidate = _get_session_and_candidate(session_id, db)
 
     assessment = db.query(MCQAssessment).filter(MCQAssessment.session_id == session_uuid).first()
@@ -441,6 +490,7 @@ def submit_answer(session_id: str, body: MCQAnswerRequest, db: SQLASession = Dep
             raise HTTPException(status_code=400, detail=f"Response exceeds the {MCQ_OPEN_TEXT_MAX_CHARS}-character limit")
         answer.text_response = text
         answer.time_taken_seconds = round(elapsed)
+        background_tasks.add_task(_judge_answer_in_background, answer.id)
 
     answer.answered_at = now
 

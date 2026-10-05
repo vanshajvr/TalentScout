@@ -18,6 +18,8 @@ from utils.auth import (
 )
 
 from utils.schemas import AuthResponse
+from utils.judge import RUBRIC_DIMENSIONS, overall, validate_scores
+from routers.mcq import judge_and_store
 
 router = APIRouter(prefix="/recruiter")
 
@@ -349,7 +351,14 @@ def candidate_questions(
                 payload["is_correct"] = a.is_correct
                 payload["difficulty_tier"] = a.difficulty_tier
                 payload["correct_option_id"] = correct_by_pool_id.get(a.pool_question_id) if a.pool_question_id else None
+            elif a.question_type == "open_text":
+                payload["judge"] = _judge_payload(a)
             question_payloads.append(payload)
+
+        open_text_overalls = [
+            p["judge"]["overall"] for p in question_payloads
+            if p["question_type"] == "open_text" and p["judge"]["overall"] is not None
+        ]
 
         return {
             "assessment_type": "mcq",
@@ -361,6 +370,7 @@ def candidate_questions(
                 "final_difficulty_tier": final_difficulty_tier,
                 "tab_switch_count": assessment.tab_switch_count,
                 "fullscreen_exit_count": assessment.fullscreen_exit_count,
+                "open_text_avg": round(sum(open_text_overalls) / len(open_text_overalls), 1) if open_text_overalls else None,
                 "questions": question_payloads,
             },
         }
@@ -375,6 +385,97 @@ def candidate_questions(
             for q in legacy_questions
         ],
     }
+
+
+def _judge_payload(a: MCQAnswer) -> dict:
+    effective = a.override_scores or a.judge_scores
+    return {
+        "status": (
+            "overridden" if a.override_scores else
+            "graded" if a.judge_scores else
+            "failed" if a.judge_error else
+            "pending" if a.answered_at else "unanswered"
+        ),
+        "scores": effective,
+        "overall": overall(effective),
+        "ai_scores": a.judge_scores,  # kept visible after an override, for comparison
+        "rationale": a.judge_rationale,
+        "manipulation_attempt": bool(a.judge_manipulation),
+        "model": a.judge_model,
+        "dimensions": list(RUBRIC_DIMENSIONS),
+    }
+
+
+def _org_candidate_assessment_or_404(db: SQLASession, candidate_id: str, org_id):
+    try:
+        cid = uuid.UUID(candidate_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid candidate_id")
+    candidate_row = db.get(Candidate, cid)
+    if candidate_row is None or candidate_row.org_id != org_id:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    session_row = db.query(CandidateSession).filter(CandidateSession.candidate_id == cid).order_by(CandidateSession.started_at.desc()).first()
+    assessment = db.query(MCQAssessment).filter(MCQAssessment.session_id == session_row.id).first() if session_row else None
+    if assessment is None:
+        raise HTTPException(status_code=404, detail="No assessment for this candidate")
+    return candidate_row, assessment
+
+
+@router.post("/candidates/{candidate_id}/judge")
+def judge_candidate_answers(
+    candidate_id: str, force: bool = False,
+    db: SQLASession = Depends(get_db), recruiter: Recruiter = Depends(require_recruiter),
+):
+    """Grades any open-text answers the background judge missed (LLM outage, or answers
+    submitted before this feature existed). force=true re-grades all of them, e.g.
+    after a prompt change. Overrides are left untouched either way."""
+    candidate_row, assessment = _org_candidate_assessment_or_404(db, candidate_id, recruiter.org_id)
+    answers = db.query(MCQAnswer).filter(
+        MCQAnswer.assessment_id == assessment.id,
+        MCQAnswer.question_type == "open_text",
+        MCQAnswer.answered_at.isnot(None),
+    ).all()
+    judged = failed = 0
+    for a in answers:
+        if a.judge_scores is not None and not force:
+            continue
+        if judge_and_store(db, a, candidate_row):
+            judged += 1
+        else:
+            failed += 1
+    db.commit()
+    return {"judged": judged, "failed": failed}
+
+
+class OverrideScoresRequest(BaseModel):
+    scores: dict | None  # {relevance, specificity, clarity}: 1-5, or null to clear the override
+
+
+@router.put("/candidates/{candidate_id}/answers/{question_index}/override")
+def override_answer_scores(
+    candidate_id: str, question_index: int, body: OverrideScoresRequest,
+    db: SQLASession = Depends(get_db), recruiter: Recruiter = Depends(require_recruiter),
+):
+    _, assessment = _org_candidate_assessment_or_404(db, candidate_id, recruiter.org_id)
+    answer = db.query(MCQAnswer).filter(
+        MCQAnswer.assessment_id == assessment.id, MCQAnswer.question_index == question_index,
+    ).first()
+    if answer is None or answer.question_type != "open_text":
+        raise HTTPException(status_code=404, detail="Open-text answer not found")
+
+    if body.scores is None:
+        answer.override_scores = None
+        answer.override_by = None
+        answer.override_at = None
+    else:
+        try:
+            answer.override_scores = validate_scores(body.scores)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Scores must be whole numbers 1-5 for {', '.join(RUBRIC_DIMENSIONS)}: {e}")
+        answer.override_by = recruiter.id
+        answer.override_at = datetime.utcnow()
+    db.commit()
+    return _judge_payload(answer)
 
 
 def _csv_safe(value) -> str:
