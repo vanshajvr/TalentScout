@@ -58,6 +58,21 @@ management.
   not the candidate's resume: candidates are screened for the role they
   applied to
 
+**Ranked shortlist**
+- One view that ranks every candidate who finished the assessment, across
+  job fit, technical accuracy and the written-answer average (default
+  weights 40/40/20, adjustable with sliders)
+- Every component is shown next to the composite, with a one-line summary
+  per candidate ("Fit 60 (missing Kubernetes) · Technical 7/10, ended at
+  advanced · Written 4.2/5"), so a rank can always be explained
+- Missing components (no job, written answers not graded yet) are left out
+  and the remaining weights rescaled rather than counted as zero; the row is
+  marked partial
+- Integrity signals (tab switches, fullscreen exits, attempts to instruct
+  the AI grader) are flags for review and never lower a score. A tab switch
+  can be innocent, and the system can't tell the difference
+- Filter by job, click through to a candidate's full responses, export as CSV
+
 **AI-graded written answers, with a human in the loop**
 - The two open-text answers are graded in the background (the candidate never
   waits on the LLM) on relevance, specificity and clarity, each 1-5 with a
@@ -163,6 +178,7 @@ management.
 │   ├── mcq.py              # MCQ assessment: serving, answering, integrity events
 │   ├── recruiter.py       # Auth, candidate listing, export, delete, org context
 │   ├── jobs.py            # Job openings: JD extraction, CRUD, fit re-scoring
+│   ├── shortlist.py       # Ranked shortlist across fit, technical and written scores
 │   └── admin.py           # Org signup, team management, invite codes
 ├── utils/
 │   ├── auth.py             # Token issuance/validation, password hashing
@@ -172,7 +188,8 @@ management.
 │   ├── validators.py       # Name/email/phone/experience validation
 │   ├── job_match.py        # Deterministic candidate-to-job fit scoring
 │   ├── extraction.py       # Resume/JD LLM extraction (shared by API routes and evals)
-│   └── judge.py            # Open-text answer judge (shared by API routes and evals)
+│   ├── judge.py            # Open-text answer judge (shared by API routes and evals)
+│   └── shortlist.py        # Composite shortlist scoring
 └── static/
     ├── candidate/          # Candidate-facing chat UI + landing page
     ├── mcq/                 # MCQ assessment UI

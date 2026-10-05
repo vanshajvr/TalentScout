@@ -650,3 +650,18 @@ button:disabled {
 .judge-edit label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
 .judge-edit select { padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: #fdf9f2; color: var(--text); }
 .judge-flag { color: var(--warn); background: #f8ead9; border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; display: flex; gap: 6px; align-items: center; }
+
+/* --- Shortlist --- */
+.shortlist-controls { align-items: center; }
+.weight-control { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.weight-control input[type="range"] { width: 90px; accent-color: var(--accent); padding: 0; border: none; background: none; }
+.weight-control span { min-width: 22px; color: var(--text); font-weight: 500; }
+.shortlist-note { font-size: 12.5px; color: var(--muted); padding: 12px 28px 0; line-height: 1.5; }
+.shortlist-row { cursor: pointer; }
+.shortlist-name { font-weight: 500; color: var(--text); }
+.shortlist-sub { font-size: 11.5px; color: var(--muted); }
+.shortlist-summary { white-space: normal; min-width: 260px; color: var(--muted); font-size: 12.5px; }
+.partial-mark { font-size: 10.5px; color: var(--muted); margin-left: 6px; }
+.muted-cell { color: var(--muted); }
+.flag-chip { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px; margin: 1px 4px 1px 0; background: #f5e3c8; color: #9a6a1f; white-space: nowrap; }
+.flag-chip.manipulation { background: #f5e2df; color: var(--accent); }

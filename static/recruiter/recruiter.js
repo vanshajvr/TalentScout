@@ -27,6 +27,10 @@ const jobError = document.getElementById("job-error");
 const jobExtractBtn = document.getElementById("job-extract-btn");
 const jobCreateBtn = document.getElementById("job-create-btn");
 const filterJob = document.getElementById("filter-job");
+const shortlistJob = document.getElementById("shortlist-job");
+const shortlistBody = document.getElementById("shortlist-body");
+const shortlistNote = document.getElementById("shortlist-note");
+const WEIGHT_DEFAULTS = { fit: 40, technical: 40, written: 20 };
 
 const loginEmail = document.getElementById("login-email");
 const loginPassword = document.getElementById("login-password");
@@ -237,7 +241,92 @@ async function loadJobs() {
     filterJob.appendChild(opt);
   });
   filterJob.value = Array.from(filterJob.options).some((o) => o.value === previous) ? previous : "";
+
+  const previousShortlist = shortlistJob.value;
+  shortlistJob.innerHTML = filterJob.innerHTML.replace("Any job", "All candidates");
+  shortlistJob.value = Array.from(shortlistJob.options).some((o) => o.value === previousShortlist) ? previousShortlist : "";
 }
+
+function shortlistParams() {
+  const params = new URLSearchParams();
+  if (shortlistJob.value) params.set("job_id", shortlistJob.value);
+  Object.keys(WEIGHT_DEFAULTS).forEach((c) => params.set(`w_${c}`, document.getElementById(`w-${c}`).value));
+  return params;
+}
+
+function componentCell(value) {
+  return value == null ? '<span class="muted-cell">—</span>' : `${value}`;
+}
+
+let shortlistRequest = 0;
+
+async function loadShortlist() {
+  const requestId = ++shortlistRequest;  // ignore responses that arrive after a newer slider change
+  const res = await authedFetch(`${API}/recruiter/shortlist?${shortlistParams().toString()}`);
+  const data = await res.json();
+  if (requestId !== shortlistRequest) return;
+
+  const pending = data.not_yet_completed
+    ? ` ${data.not_yet_completed} more haven't finished the assessment yet and aren't ranked.`
+    : "";
+  shortlistNote.textContent = data.ranked
+    ? `${data.ranked} ranked.${pending} Missing parts (no job, written answers not graded yet) are left out of a score rather than counted as zero, and the score is marked partial. Flags are for review and never lower a score.`
+    : `No finished assessments yet.${pending}`;
+
+  shortlistBody.innerHTML = "";
+  data.candidates.forEach((c) => {
+    const tr = document.createElement("tr");
+    tr.className = "shortlist-row";
+    const flags = c.flags.map((f) => `<span class="flag-chip ${escapeHtml(f.type)}">${escapeHtml(f.label)}</span>`).join("");
+    tr.innerHTML = `
+      <td>${c.rank}</td>
+      <td><div class="shortlist-name">${escapeHtml(c.name) || "—"}</div><div class="shortlist-sub">${escapeHtml(c.job_title || c.email || "")}</div></td>
+      <td>${c.score == null ? "—" : `<span class="fit-score ${fitBand(c.score)}">${c.score}</span>${c.partial ? '<span class="partial-mark" title="Some weighted parts are missing for this candidate">partial</span>' : ""}`}</td>
+      <td title="${escapeHtml(c.fit_summary || "")}">${componentCell(c.components.fit)}</td>
+      <td title="${c.technical.total ? `${c.technical.correct}/${c.technical.total} correct` : ""}">${componentCell(c.components.technical)}</td>
+      <td title="${c.written.average != null ? `${c.written.average} / 5 average` : c.written.pending ? "Not graded yet" : ""}">${componentCell(c.components.written)}</td>
+      <td>${flags || '<span class="muted-cell">—</span>'}</td>
+      <td class="shortlist-summary">${escapeHtml(c.summary)}</td>
+    `;
+    tr.addEventListener("click", () => openCandidateResponses(c.candidate_id));
+    shortlistBody.appendChild(tr);
+  });
+}
+
+function openCandidateResponses(candidateId) {
+  document.querySelector('.rec-nav-item[data-tab="responses"]').click();
+  if (Array.from(responsesSelect.options).some((o) => o.value === candidateId)) responsesSelect.value = candidateId;
+  loadCandidateQuestions(candidateId);
+}
+
+Object.keys(WEIGHT_DEFAULTS).forEach((c) => {
+  const input = document.getElementById(`w-${c}`);
+  input.addEventListener("input", () => {
+    document.getElementById(`w-${c}-val`).textContent = input.value;
+  });
+  input.addEventListener("change", loadShortlist);
+});
+
+document.getElementById("shortlist-reset").addEventListener("click", () => {
+  Object.entries(WEIGHT_DEFAULTS).forEach(([c, v]) => {
+    document.getElementById(`w-${c}`).value = v;
+    document.getElementById(`w-${c}-val`).textContent = v;
+  });
+  loadShortlist();
+});
+
+shortlistJob.addEventListener("change", loadShortlist);
+
+document.getElementById("shortlist-export").addEventListener("click", async () => {
+  const params = shortlistParams();
+  params.set("format", "csv");
+  const res = await authedFetch(`${API}/recruiter/shortlist?${params.toString()}`);
+  const blob = await res.blob();
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "shortlist.csv";
+  link.click();
+});
 
 function jobScreeningLink(job) {
   return `${window.location.origin}/screen/${orgSlug}/jobs/${job.id}`;
@@ -267,15 +356,14 @@ function renderJobs() {
         ${job.min_experience != null ? ` · ${job.min_experience}+ yrs required` : ""}
       </div>
       <div class="job-card-actions">
-        <button data-action="ranked">View ranked candidates</button>
+        <button data-action="ranked">View shortlist</button>
         ${job.status === "open" ? '<button data-action="copy">Copy screening link</button>' : ""}
         <button data-action="toggle">${job.status === "open" ? "Close job" : "Reopen job"}</button>
       </div>
     `;
     card.querySelector('[data-action="ranked"]').addEventListener("click", () => {
-      filterJob.value = job.id;
-      document.querySelector('.rec-nav-item[data-tab="candidates"]').click();
-      loadCandidates();
+      shortlistJob.value = job.id;
+      document.querySelector('.rec-nav-item[data-tab="shortlist"]').click();
     });
     card.querySelector('[data-action="copy"]')?.addEventListener("click", async (e) => {
       try {
@@ -562,6 +650,7 @@ document.querySelectorAll(".rec-nav-item").forEach((item) => {
     document.querySelectorAll(".tab-panel").forEach((p) => (p.style.display = "none"));
     item.classList.add("active");
     document.getElementById(`tab-${item.dataset.tab}`).style.display = "block";
+    if (item.dataset.tab === "shortlist") loadShortlist();
   });
 });
 
