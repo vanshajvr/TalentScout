@@ -1,35 +1,35 @@
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException
+from sqlalchemy import func, text
+from sqlalchemy.orm import Session as SQLASession
 
-# In-memory, resets on restart — an acceptable tradeoff here, unlike the candidate
-# conversation-state problem flagged elsewhere. A restart briefly clearing counters
-# gives an attacker at most a momentary reprieve, not an actual security hole, since
-# they'd need to sustain the attack precisely across an unpredictable restart to
-# benefit. This is basic abuse prevention on unauthenticated endpoints, not a hard
-# security boundary — a real distributed deployment would want this backed by Redis
-# or the DB instead.
-_request_log: dict[str, list[datetime]] = {}
+from db.models import RateLimitEvent
 
 
-def check_rate_limit(key: str, max_requests: int, window_minutes: int) -> None:
-    """Raises 429 if `key` (e.g. an IP address) has made >= max_requests within the
-    last window_minutes."""
-    now = datetime.utcnow()
-    window_start = now - timedelta(minutes=window_minutes)
-    recent = [t for t in _request_log.get(key, []) if t >= window_start]
+def check_rate_limit(db: SQLASession, key: str, max_requests: int, window_minutes: int) -> None:
+    """Raises 429 if `key` (e.g. "start_session:<ip>") has made >= max_requests within
+    the last window_minutes; otherwise records this request.
 
-    if len(recent) >= max_requests:
-        _request_log[key] = recent
+    Backed by Postgres rather than process memory, so limits hold across restarts,
+    deploys and multiple workers. A transaction-scoped advisory lock on the key
+    serializes concurrent requests for the same key — without it, a burst of parallel
+    requests could all read "under the limit" before any of them recorded itself.
+    Commits its own work, so call it before the endpoint does anything else.
+    """
+    db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": key})
+
+    window_start = datetime.utcnow() - timedelta(minutes=window_minutes)
+    # Expired rows for this key are dead weight; clearing them here keeps the table
+    # bounded by (active keys x max_requests) with no separate cleanup job.
+    db.query(RateLimitEvent).filter(
+        RateLimitEvent.key == key, RateLimitEvent.created_at < window_start,
+    ).delete(synchronize_session=False)
+
+    recent = db.query(func.count(RateLimitEvent.id)).filter(RateLimitEvent.key == key).scalar()
+    if recent >= max_requests:
+        db.commit()  # keep the cleanup, release the lock
         raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
 
-    recent.append(now)
-    _request_log[key] = recent
-
-    # Lightweight, non-blocking cleanup so this dict doesn't grow unboundedly over a
-    # long-running process with many distinct keys — only bother once it's actually
-    # grown large, to avoid constant overhead in the common case.
-    if len(_request_log) > 1000:
-        stale = [k for k, v in _request_log.items() if not any(t >= window_start for t in v)]
-        for k in stale:
-            del _request_log[k]
+    db.add(RateLimitEvent(key=key))
+    db.commit()

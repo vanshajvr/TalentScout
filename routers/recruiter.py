@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import func
 from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
@@ -197,18 +198,20 @@ ABANDONED_AFTER_HOURS = 48
 
 
 def _sweep_stale_sessions(db: SQLASession, org_id) -> None:
-    """Lazily corrects any in_progress session that's gone quiet for 48+ hours to
-    "abandoned" — a candidate who just closes the tab (never types an exit keyword,
-    never finishes) would otherwise sit as "in_progress" forever, inflating that stat
-    indefinitely. Called at the top of the recruiter-facing read endpoints, so the DB
-    self-corrects for real whenever someone actually looks, rather than needing a
-    separate background job. A flat 48h-since-started_at check is accurate enough
-    here — this screening flow takes at most 20-40 minutes even fully engaged, so the
-    gap between "started" and "actually went quiet" is dwarfed by the 48h window."""
+    """Marks in_progress sessions with no candidate activity for 48+ hours as
+    "abandoned" — a candidate who just closes the tab never types an exit keyword or
+    finishes, and would otherwise count as "in progress" forever. Runs at the top of
+    the recruiter-facing reads, so the data is corrected whenever someone looks,
+    without a separate background job.
+
+    Measured from the last activity, not from when the session started: candidates
+    can resume (conversation state is persisted), so a session started three days ago
+    that the candidate is working in right now is not abandoned. If an abandoned
+    candidate does come back, deps.record_candidate_activity reopens the session."""
     threshold = datetime.utcnow() - timedelta(hours=ABANDONED_AFTER_HOURS)
     db.query(CandidateSession).filter(
         CandidateSession.status == "in_progress",
-        CandidateSession.started_at < threshold,
+        func.coalesce(CandidateSession.last_activity_at, CandidateSession.started_at) < threshold,
         CandidateSession.candidate_id.in_(
             db.query(Candidate.id).filter(Candidate.org_id == org_id)
         ),

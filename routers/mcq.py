@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db, SessionLocal
 from db.models import MCQAssessment, MCQAnswer, MCQQuestion, JobOpening, CandidateSession, Candidate
-from deps import get_session_or_404, get_candidate_or_404
+from deps import get_session_or_404, get_candidate_or_404, record_candidate_activity
 from utils.constants import (
     MCQ_TECHNICAL_COUNT, MCQ_BEHAVIORAL_COUNT, MCQ_TOTAL_COUNT,
     MCQ_TECHNICAL_TIME_LIMIT_SECONDS, MCQ_OPEN_TEXT_MAX_CHARS, MCQ_DIFFICULTY_TIERS,
@@ -399,6 +399,7 @@ def _get_session_and_candidate(session_id: str, db: SQLASession):
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid session_id")
     session_row = get_session_or_404(db, session_uuid)
+    record_candidate_activity(db, session_row)
     candidate = get_candidate_or_404(db, session_row.candidate_id)
     return session_uuid, session_row, candidate
 

@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: talentscout_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/talentscout_test
+      # conftest.py refuses to run if this equals TEST_DATABASE_URL; nothing connects to it.
+      DATABASE_URL: postgresql://unused:unused@localhost:5432/unused
+      # The app constructs its LLM client at import time; every test fakes the LLM itself.
+      GROQ_API_KEY: ci-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"  # matches the Dockerfile
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
+
+  migrations:
+    # Replays the production upgrade path: build the pre-Alembic schema from the
+    # baseline commit, run every migration, then fail if the result differs from
+    # db/models.py — i.e. if a model changed without a matching migration.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: talentscout
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/talentscout
+      GROQ_API_KEY: ci-placeholder
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # needs the baseline commit
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      # psycopg2 only for the baseline commit's code, which predates the psycopg 3 switch.
+      - run: pip install -r requirements.txt psycopg2-binary
+      - name: Build the schema as of the Alembic baseline (a0d5083)
+        run: |
+          mkdir /tmp/baseline
+          git archive a0d5083 | tar -x -C /tmp/baseline
+          cd /tmp/baseline && python create_tables.py
+      - run: alembic upgrade head
+      - run: alembic check
+      - name: Re-running upgrade is a no-op (every deploy does this)
+        run: alembic upgrade head

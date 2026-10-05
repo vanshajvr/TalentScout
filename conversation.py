@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 from utils.constants import STEPS, EXIT_KEYWORDS
 from utils.validators import is_valid_name
@@ -24,6 +24,23 @@ class ConversationState:
     candidate: CandidateState = field(default_factory=CandidateState)
     retry: bool = False
     pending_resume_data: dict = field(default_factory=dict)
+
+def state_to_dict(state: ConversationState) -> dict:
+    return asdict(state)
+
+
+def state_from_dict(data: dict) -> ConversationState:
+    """Tolerates missing or extra keys, so adding a field to either dataclass later
+    doesn't break sessions that were saved before the change."""
+    candidate_fields = CandidateState.__dataclass_fields__
+    candidate = CandidateState(**{k: v for k, v in (data.get("candidate") or {}).items() if k in candidate_fields})
+    return ConversationState(
+        step=data.get("step", "greeting"),
+        candidate=candidate,
+        retry=data.get("retry", False),
+        pending_resume_data=data.get("pending_resume_data") or {},
+    )
+
 
 def next_step(current_step: str) -> str:
     idx = STEPS.index(current_step)

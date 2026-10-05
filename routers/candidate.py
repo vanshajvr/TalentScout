@@ -9,13 +9,13 @@ from sqlalchemy.orm import Session as SQLASession
 
 from db.database import get_db
 from db.models import Candidate, CandidateSession, Message, SessionLog, Organization, JobOpening
-from conversation import ConversationState, handle_user_input, get_bot_message
+from conversation import ConversationState, handle_user_input, get_bot_message, state_from_dict, state_to_dict
 from llm.groq_llm import GroqLLM
 from utils.validators import is_valid_email, is_valid_phone, is_valid_experience
 from utils.rate_limit import check_rate_limit
 from utils.job_match import apply_job_fit
 from utils.extraction import extract_resume_text, extract_resume_fields
-from deps import get_candidate_or_404, get_session_or_404
+from deps import get_candidate_or_404, get_session_or_404, record_candidate_activity
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -38,7 +38,6 @@ RESUME_FILE_SIGNATURES = {
 }
 
 llm = GroqLLM()
-ACTIVE_SESSIONS: dict[str, ConversationState] = {}
 
 class StartSessionResponse(BaseModel):
     session_id: str
@@ -99,6 +98,31 @@ def _sync_candidate_row(db: SQLASession, candidate_id: uuid.UUID, state: Convers
     row.linkedin_url = c.linkedin or None
     row.github_url = c.github or None
     db.commit()
+
+
+def _load_session_state(db: SQLASession, session_id: str) -> tuple[uuid.UUID, CandidateSession, ConversationState]:
+    """Conversation state lives on the session row, not in process memory — so a
+    deploy, a restart, or a second worker never strands a candidate mid-screening."""
+    try:
+        session_uuid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+    session_row = get_session_or_404(db, session_uuid)
+    record_candidate_activity(db, session_row)
+    if session_row.conversation_state is not None:
+        state = state_from_dict(session_row.conversation_state)
+    else:
+        # Sessions started before state was persisted: rebuild from what the DB has.
+        state = ConversationState(step=session_row.current_step)
+        candidate_row = get_candidate_or_404(db, session_row.candidate_id)
+        state.candidate.name = candidate_row.name or ""
+    return session_uuid, session_row, state
+
+
+def _store_session_state(session_row: CandidateSession, state: ConversationState) -> None:
+    """Assigns a fresh dict (not an in-place mutation) so SQLAlchemy sees the JSON
+    column as changed. The caller commits."""
+    session_row.conversation_state = state_to_dict(state)
 
 
 def _difficulty_tier(experience) -> str:
@@ -173,7 +197,7 @@ def get_job_public(slug: str, job_id: str, db: SQLASession = Depends(get_db)):
 @router.post("/sessions", response_model=StartSessionResponse)
 def start_session(request: Request, org: str = "default", job: str | None = None, db: SQLASession = Depends(get_db)):
     ip = request.client.host if request.client else None
-    check_rate_limit(f"start_session:{ip or 'unknown'}", max_requests=10, window_minutes=60)
+    check_rate_limit(db, f"start_session:{ip or 'unknown'}", max_requests=10, window_minutes=60)
 
     org_row = db.query(Organization).filter(Organization.slug == org).first()
     if org_row is None:
@@ -184,14 +208,12 @@ def start_session(request: Request, org: str = "default", job: str | None = None
     db.add(candidate_row)
     db.flush()
 
-    session_row = CandidateSession(candidate_id=candidate_row.id, current_step="greeting")
+    state = ConversationState()
+    session_row = CandidateSession(candidate_id=candidate_row.id, current_step="greeting", conversation_state=state_to_dict(state))
     db.add(session_row)
     db.commit()
     db.refresh(session_row)
-
-    state = ConversationState()
     session_id = str(session_row.id)
-    ACTIVE_SESSIONS[session_id] = state
 
     greeting = get_bot_message(state)
     db.add(Message(session_id=session_row.id, role="assistant", content=greeting))
@@ -201,23 +223,13 @@ def start_session(request: Request, org: str = "default", job: str | None = None
 
 @router.post("/sessions/{session_id}/messages", response_model=MessageResponse)
 def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depends(get_db)):
-    state = ACTIVE_SESSIONS.get(session_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="Session not found or expired")
-
-    try:
-        session_uuid = uuid.UUID(session_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid session_id")
-
-    session_row = get_session_or_404(db, session_uuid)
+    session_uuid, session_row, state = _load_session_state(db, session_id)
 
     db.add(Message(session_id=session_uuid, role="user", content=body.text, is_pasted=body.pasted))
 
     result = handle_user_input(state, body.text)
     state = result.state
-
-    ACTIVE_SESSIONS[session_id] = state
+    _store_session_state(session_row, state)
 
     for msg in result.bot_messages:
         db.add(Message(session_id=session_uuid, role="assistant", content=msg))
@@ -228,7 +240,6 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
 
 
     bot_messages = list(result.bot_messages)
-    ACTIVE_SESSIONS[session_id] = state
 
     return MessageResponse(
         messages=bot_messages,
@@ -238,16 +249,9 @@ def post_message(session_id: str, body: MessageRequest, db: SQLASession = Depend
 
 @router.post("/sessions/{session_id}/resume")
 def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession = Depends(get_db)):
-    state = ACTIVE_SESSIONS.get(session_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="Session not found or expired")
+    session_uuid, session_row, state = _load_session_state(db, session_id)
     if state.step != "upload_resume":
         raise HTTPException(status_code=400, detail="Not expecting a resume upload right now")
-
-    try:
-        session_uuid = uuid.UUID(session_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid session_id")
 
     allowed = {".pdf", ".docx"}
     ext = os.path.splitext(file.filename or "")[1].lower()
@@ -262,12 +266,11 @@ def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession
     if not content.startswith(expected_signature):
         raise HTTPException(status_code=400, detail="File content doesn't match its extension")
 
-    safe_name = f"{session_id}{ext}"
+    safe_name = f"{session_uuid}{ext}"  # the parsed UUID, never the raw path segment
     dest_path = os.path.join(UPLOAD_DIR, safe_name)
     with open(dest_path, "wb") as f:
         f.write(content)
 
-    session_row = get_session_or_404(db, session_uuid)
     candidate_row = get_candidate_or_404(db, session_row.candidate_id)
     candidate_row.resume_filename = file.filename
     candidate_row.resume_path = dest_path
@@ -281,7 +284,7 @@ def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession
         _log_event(db, session_uuid, "error", "Resume extraction returned empty result")
 
     state.step = "confirm_resume_data"
-    ACTIVE_SESSIONS[session_id] = state
+    _store_session_state(session_row, state)
 
     summary_lines = []
     if extracted.get("email") is not None: summary_lines.append(f"Email: {extracted['email']}")
@@ -311,18 +314,9 @@ def upload_resume(session_id: str, file: UploadFile = File(...), db: SQLASession
         )
 @router.post("/sessions/{session_id}/resume/confirm", response_model=MessageResponse)
 def confirm_resume_data(session_id: str, body: ConfirmResumeRequest, db: SQLASession = Depends(get_db)):
-    state = ACTIVE_SESSIONS.get(session_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail="Session not found or expired")
+    session_uuid, session_row, state = _load_session_state(db, session_id)
     if state.step not in ("confirm_resume_data",):
         raise HTTPException(status_code=400, detail="Not expecting resume confirmation right now")
-
-    try:
-        session_uuid = uuid.UUID(session_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid session_id")
-
-    session_row = get_session_or_404(db, session_uuid)
 
     state.pending_resume_data = {
         "email": body.email or None,
@@ -335,6 +329,9 @@ def confirm_resume_data(session_id: str, body: ConfirmResumeRequest, db: SQLASes
         "linkedin": body.linkedin or None,
         "github": body.github or None,
     }
+    # Saved with whichever commit comes next — including the early "fix this field"
+    # returns below, so the candidate's edits survive a restart between attempts.
+    _store_session_state(session_row, state)
 
     # catch duplicate email BEFORE it ever reaches the database
     if body.email:
@@ -403,7 +400,7 @@ def confirm_resume_data(session_id: str, body: ConfirmResumeRequest, db: SQLASes
     db.add(Message(session_id=session_uuid, role="user", content="[confirmed edited resume data]"))
     result = handle_user_input(state, "yes")
     state = result.state
-    ACTIVE_SESSIONS[session_id] = state
+    _store_session_state(session_row, state)
 
     for msg in result.bot_messages:
         db.add(Message(session_id=session_uuid, role="assistant", content=msg))

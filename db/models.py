@@ -71,6 +71,12 @@ class CandidateSession(Base):
     status: Mapped[str] = mapped_column(String(20), default="in_progress")  # in_progress | completed | abandoned
     started_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    # Last time the candidate did anything (message, upload, answer). The stale-session
+    # sweep measures inactivity from here, not from started_at.
+    last_activity_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    # The intake conversation's state (conversation.ConversationState). Persisted so a
+    # restart, deploy, or second worker doesn't strand candidates mid-screening.
+    conversation_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     candidate: Mapped["Candidate"] = relationship(back_populates="sessions")
     questions: Mapped[list["GeneratedQuestion"]] = relationship(back_populates="session")
@@ -240,3 +246,13 @@ class MCQAnswer(Base):
     override_scores: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     override_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("recruiters.id", ondelete="SET NULL"), nullable=True)
     override_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
+
+class RateLimitEvent(Base):
+    """One row per rate-limited request, kept only for the length of its window
+    (see utils/rate_limit.py)."""
+    __tablename__ = "rate_limit_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    key: Mapped[str] = mapped_column(String(200), index=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)

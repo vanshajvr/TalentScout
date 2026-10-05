@@ -139,9 +139,19 @@ management.
   on their next successful login, no forced reset
 - Login lockout after repeated failed attempts within a rolling window;
   unauthenticated signup/session-creation endpoints are rate-limited per IP
-- Recruiter auth tokens are validated against the database, not an
-  in-memory store — sessions survive a restart and work correctly across
-  multiple worker processes
+  (using the real client IP from the proxy's forwarded headers, not the
+  proxy's own address)
+- Nothing that matters lives in process memory. Recruiter auth tokens,
+  candidates' in-progress conversations and rate-limit counters are all in
+  Postgres, so a deploy or restart never logs anyone out or strands a
+  candidate mid-screening, and everything works across multiple workers. The
+  rate limiter takes a per-key advisory lock, so a burst of parallel requests
+  can't slip past the limit together
+- Team changes lock the org's admin rows, so two admins demoting or removing
+  each other at the same moment can't leave an org with no admin. Both
+  concurrency fixes have tests that fail without the lock
+- A session counts as abandoned after 48 hours without candidate activity
+  (not 48 hours after it started), and a candidate who comes back reopens it
 - Resume-derived values are never interpolated into raw HTML on the
   candidate confirm card, closing an injection vector
 - Runs as a non-root user in Docker
@@ -154,9 +164,9 @@ management.
 ├── main.py               # FastAPI entrypoint, mounts routers/static
 ├── conversation.py        # Deterministic state-machine conversation logic
 ├── deps.py                # Shared DB dependency helpers
-├── create_tables.py       # Fresh-schema creation script
+├── create_tables.py       # Creates the schema on a brand-new database and stamps it for Alembic
 ├── seed_mcq_pool.py       # Seeds the technical MCQ question pool via LLM
-├── migrations/            # One-off migration scripts (run as `python -m migrations.xyz`)
+├── alembic/               # Schema migrations (run automatically on container start)
 ├── evals/                 # Offline LLM extraction evals: labeled datasets, metrics, runner
 ├── db/
 │   ├── database.py        # SQLAlchemy session/engine setup
@@ -182,7 +192,7 @@ management.
 │   └── admin.py           # Org signup, team management, invite codes
 ├── utils/
 │   ├── auth.py             # Token issuance/validation, password hashing
-│   ├── rate_limit.py       # In-memory sliding-window rate limiter
+│   ├── rate_limit.py       # Postgres-backed sliding-window rate limiter
 │   ├── schemas.py          # Shared Pydantic response models
 │   ├── constants.py        # Conversation step order, MCQ config
 │   ├── validators.py       # Name/email/phone/experience validation
@@ -249,16 +259,20 @@ GROQ_API_KEY=your_groq_api_key
 ```
 
 
-Create the schema:
+Create the schema on a brand-new database:
 ```bash
 python create_tables.py
 ```
 
-Upgrading an existing database instead? Run the migrations for the newer features:
+Already have a database? Apply any pending migrations instead (the Docker
+container also does this automatically every time it starts):
 ```bash
-python -m migrations.migrate_job_openings
-python -m migrations.migrate_open_text_judge
+alembic upgrade head
 ```
+
+After changing `db/models.py`, add a migration with
+`alembic revision --autogenerate -m "what changed"`, then review it. CI fails
+if the models and migrations disagree.
 
 Seed the technical MCQ question pool (requires `GROQ_API_KEY`, safe to
 re-run — skips buckets already at their target count):
@@ -289,10 +303,6 @@ To run against local Ollama instead of Groq, swap the import in
   unverified in this demo (an earlier version had OTP verification; it was
   removed after repeated deliverability issues on free-tier hosting, in
   favor of building out the org/RBAC and assessment features instead)
-- Schema migrations are hand-written one-off scripts under `migrations/`
-  (run as `python -m migrations.<name>`), not a migration framework,
-  acceptable at this project's current size, worth revisiting if schema
-  changes become more frequent
 
 ---
 

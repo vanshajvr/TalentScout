@@ -69,10 +69,12 @@ def _get_org_job_or_404(db: SQLASession, job_id: str, org_id) -> JobOpening:
 
 
 @router.post("/parse")
-def parse_job_description(body: ParseJobRequest, recruiter: Recruiter = Depends(require_recruiter)):
+def parse_job_description(
+    body: ParseJobRequest, db: SQLASession = Depends(get_db), recruiter: Recruiter = Depends(require_recruiter),
+):
     """LLM-assisted extraction of structured requirements from a pasted JD. Returns a
     draft only — nothing is saved until the recruiter reviews it and calls POST /."""
-    check_rate_limit(f"parse_jd:{recruiter.id}", max_requests=30, window_minutes=60)
+    check_rate_limit(db, f"parse_jd:{recruiter.id}", max_requests=30, window_minutes=60)
 
     try:
         return extract_job_requirements(llm, body.title, body.description)

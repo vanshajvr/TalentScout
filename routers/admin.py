@@ -32,7 +32,7 @@ class OrgSignupRequest(BaseModel):
 @router.post("/signup", response_model=AuthResponse)
 def create_org_and_admin(body: OrgSignupRequest, request: Request, db: SQLASession = Depends(get_db)):
     ip = request.client.host if request.client else None
-    check_rate_limit(f"admin_signup:{ip or 'unknown'}", max_requests=3, window_minutes=60)
+    check_rate_limit(db, f"admin_signup:{ip or 'unknown'}", max_requests=3, window_minutes=60)
 
     slug = re.sub(r"[^a-z0-9-]", "-", body.org_name.lower()).strip("-")
     if not slug:
@@ -87,6 +87,28 @@ class RemoveRecruiterRequest(BaseModel):
     recruiter_id: str
 
 
+def _lock_org_admins(db: SQLASession, acting_admin: Recruiter) -> list[Recruiter]:
+    """Row-locks every admin in the org (in a fixed order, so two requests can't
+    deadlock) and re-checks the acting admin is still one of them.
+
+    Without this, two admins demoting or removing each other at the same moment both
+    see "one other admin remains", both succeed, and the org is left with no admin at
+    all — with no way to recover from inside the app. With the lock, the second
+    request waits for the first to commit, re-reads, and finds it's no longer an admin.
+    """
+    admins = (
+        db.query(Recruiter)
+        .filter(Recruiter.org_id == acting_admin.org_id, Recruiter.role == "admin")
+        .order_by(Recruiter.id)
+        .with_for_update()
+        .populate_existing()
+        .all()
+    )
+    if acting_admin.id not in {a.id for a in admins}:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return admins
+
+
 @router.post("/team/remove")
 def remove_recruiter(
     body: RemoveRecruiterRequest,
@@ -98,16 +120,13 @@ def remove_recruiter(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid recruiter_id")
 
-    target = db.get(Recruiter, target_id)
+    admins = _lock_org_admins(db, admin)
+    target = db.get(Recruiter, target_id, populate_existing=True)
     if target is None or target.org_id != admin.org_id:
         raise HTTPException(status_code=404, detail="Recruiter not found")
 
-    if target.role == "admin":
-        remaining_admins = db.query(Recruiter).filter(
-            Recruiter.org_id == admin.org_id, Recruiter.role == "admin", Recruiter.id != target.id
-        ).count()
-        if remaining_admins == 0:
-            raise HTTPException(status_code=400, detail="Can't remove the last admin in this org")
+    if target.role == "admin" and not any(a.id != target.id for a in admins):
+        raise HTTPException(status_code=400, detail="Can't remove the last admin in this org")
 
     if target_id == admin.id:
         raise HTTPException(status_code=400, detail="You can't remove your own account")
@@ -207,9 +226,16 @@ def update_recruiter_role(
         # who wants to step down needs another admin to do it for them.
         raise HTTPException(status_code=400, detail="You can't change your own role")
 
-    target = db.get(Recruiter, target_id)
+    admins = _lock_org_admins(db, admin)
+    target = db.get(Recruiter, target_id, populate_existing=True)
     if target is None or target.org_id != admin.org_id:
         raise HTTPException(status_code=404, detail="Recruiter not found")
+
+    # Unreachable through this endpoint today (you can't change your own role, so the
+    # acting admin always remains), but it's the invariant that matters, so it's
+    # enforced here rather than left implied by the self-check.
+    if target.role == "admin" and body.new_role != "admin" and not any(a.id != target.id for a in admins):
+        raise HTTPException(status_code=400, detail="Can't demote the last admin in this org")
 
     target.role = body.new_role
     db.commit()
